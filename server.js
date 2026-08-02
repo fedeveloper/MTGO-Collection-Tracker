@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { parseDekFile, parseDekContent } from './services/dekParser.js';
 import { fetchCollectionPrices } from './services/priceFetcher.js';
-import { getSettings, saveSettings, getHistory, addSnapshot, deleteSnapshot, calculateMovements } from './services/storage.js';
+import { getSettings, saveSettings, getHistory, addSnapshot, deleteSnapshot, calculateMovements, setCustomLink } from './services/storage.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -219,7 +219,6 @@ app.get('/api/history', (req, res) => {
   res.json(getHistory(source));
 });
 
-// DELETE /api/history
 app.delete('/api/history', (req, res) => {
   try {
     const { timestamp } = req.body;
@@ -230,12 +229,30 @@ app.delete('/api/history', (req, res) => {
     const settings = getSettings();
     const source = settings.priceSource || 'scryfall';
     
-    // Recalculate movements with updated history
     if (cachedEnrichedCards.length > 0) {
       cachedEnrichedCards = calculateMovements(cachedEnrichedCards, source);
     }
     
     res.json({ success: true, history: getHistory(source), cards: cachedEnrichedCards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/card/custom-link
+app.post('/api/card/custom-link', async (req, res) => {
+  try {
+    const { catId, scryfallUrl } = req.body;
+    if (!catId) {
+      return res.status(400).json({ error: 'CatID mancante.' });
+    }
+
+    setCustomLink(catId, scryfallUrl);
+    console.log(`[CustomLink] Set custom Scryfall URL for CatID ${catId}: ${scryfallUrl || 'REMOVED'}`);
+
+    cachedEnrichedCards = [];
+    const cards = await performPriceSync();
+    res.json({ success: true, cards });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -108,6 +108,19 @@ export function App() {
     }
   };
 
+  const handleSaveCustomLink = async (catId, scryfallUrl) => {
+    try {
+      const res = await axios.post('/api/card/custom-link', { catId, scryfallUrl });
+      if (res.data && res.data.cards) {
+        setCards(res.data.cards);
+        const updated = res.data.cards.find((c) => c.catId === catId);
+        if (updated) setSelectedCard(updated);
+      }
+    } catch (err) {
+      console.error('Save custom link failed:', err);
+    }
+  };
+
   const handleUploadSuccess = async (xmlContent, filename) => {
     setIsSyncing(true);
     try {
@@ -162,7 +175,7 @@ export function App() {
       {/* Metric Cards */}
       <DashboardStats cards={cards} lang={currentLang} />
 
-      {/* Portfolio History Line Chart with click-to-delete support */}
+      {/* Portfolio History Line Chart */}
       <PortfolioChart 
         history={history} 
         lang={currentLang} 
@@ -182,6 +195,7 @@ export function App() {
         <CardDetailModal 
           card={selectedCard} 
           onClose={() => setSelectedCard(null)} 
+          onSaveCustomLink={handleSaveCustomLink}
           lang={currentLang}
         />
       )}

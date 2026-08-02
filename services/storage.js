@@ -4,6 +4,7 @@ import path from 'path';
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const CUSTOM_LINKS_FILE = path.join(DATA_DIR, 'custom_links.json');
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -36,7 +37,38 @@ export function saveSettings(settings) {
 }
 
 /**
- * Read history snapshots, optionally filtered by priceSource
+ * Get custom Scryfall links overrides map (catId -> scryfallUrl)
+ */
+export function getCustomLinks() {
+  if (!fs.existsSync(CUSTOM_LINKS_FILE)) {
+    return {};
+  }
+  try {
+    const raw = fs.readFileSync(CUSTOM_LINKS_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save custom Scryfall link for a CatID
+ * @param {number|string} catId 
+ * @param {string} scryfallUrl 
+ */
+export function setCustomLink(catId, scryfallUrl) {
+  const links = getCustomLinks();
+  if (scryfallUrl && scryfallUrl.trim().length > 0) {
+    links[String(catId)] = scryfallUrl.trim();
+  } else {
+    delete links[String(catId)];
+  }
+  fs.writeFileSync(CUSTOM_LINKS_FILE, JSON.stringify(links, null, 2), 'utf-8');
+  return links;
+}
+
+/**
+ * Read history snapshots
  */
 export function getHistory(priceSource) {
   if (!fs.existsSync(HISTORY_FILE)) {
@@ -89,7 +121,6 @@ export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
 
 /**
  * Delete a snapshot by timestamp
- * @param {string} timestamp 
  */
 export function deleteSnapshot(timestamp) {
   const allHistory = getHistory();

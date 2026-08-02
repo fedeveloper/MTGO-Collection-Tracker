@@ -60,6 +60,12 @@ export const translations = {
     lastCheckChange: "Change Since Last Check",
     quantityOwned: "Quantity Owned",
     collectionValue: "Collection Value",
+    customLinkTitle: "Custom Scryfall Link",
+    customLinkSub: "Attach a specific Scryfall printing URL to this card",
+    customLinkPlaceholder: "e.g. https://scryfall.com/card/inr/120/...",
+    saveLink: "Save Link",
+    removeLink: "Remove Custom Link",
+    customLinkedBadge: "Custom Link Active",
 
     // Scheduler Modal
     schedulerTitle: "Scheduler & Settings",
@@ -162,6 +168,12 @@ export const translations = {
     lastCheckChange: "Variazione Ultimo Controllo",
     quantityOwned: "Quantità Posseduta",
     collectionValue: "Valore Collezione",
+    customLinkTitle: "Link Scryfall Personalizzato",
+    customLinkSub: "Associa un URL specifico di Scryfall a questa carta",
+    customLinkPlaceholder: "es. https://scryfall.com/card/inr/120/...",
+    saveLink: "Salva Link",
+    removeLink: "Rimuovi Link Personalizzato",
+    customLinkedBadge: "Link Personalizzato Attivo",
 
     // Scheduler Modal
     schedulerTitle: "Impostazioni Schedulazione",
