@@ -24,13 +24,18 @@ ChartJS.register(
   Filler
 );
 
-export function PortfolioChart({ history = [], lang = 'en' }) {
+export function PortfolioChart({ history = [], lang = 'en', priceSource = 'scryfall' }) {
   const t = translations[lang] || translations.en;
+
+  const sourceName = priceSource === 'goatbots' ? 'GoatBots Market' : 'Scryfall TIX';
 
   if (!history || history.length === 0) {
     return (
       <div className="glass-panel" style={{ padding: '24px', marginBottom: '28px', textAlign: 'center', color: 'var(--text-muted)' }}>
         <p>{t.chartPlaceholder}</p>
+        <span style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)', marginTop: '6px', display: 'inline-block' }}>
+          Source: {sourceName}
+        </span>
       </div>
     );
   }
@@ -50,7 +55,7 @@ export function PortfolioChart({ history = [], lang = 'en' }) {
     labels,
     datasets: [
       {
-        label: t.totalValue,
+        label: `${t.totalValue} (${sourceName})`,
         data: dataValues,
         borderColor: '#6366f1',
         backgroundColor: (context) => {
@@ -84,7 +89,7 @@ export function PortfolioChart({ history = [], lang = 'en' }) {
         borderWidth: 1,
         padding: 12,
         callbacks: {
-          label: (context) => ` ${t.totalValue}: ${context.parsed.y.toFixed(2)} TIX`
+          label: (context) => ` ${t.totalValue}: ${context.parsed.y.toFixed(2)} TIX (${sourceName})`
         }
       }
     },
@@ -106,7 +111,12 @@ export function PortfolioChart({ history = [], lang = 'en' }) {
   return (
     <div className="glass-panel" style={{ padding: '24px', marginBottom: '28px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '1.05rem', fontWeight: '700' }}>{t.chartTitle}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: '700' }}>{t.chartTitle}</h3>
+          <span style={{ fontSize: '0.75rem', background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+            {sourceName}
+          </span>
+        </div>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
           {t.savedSnapshots} {history.length}
         </span>

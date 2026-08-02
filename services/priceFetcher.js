@@ -9,18 +9,14 @@ const cardMetadataCache = new Map();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Fetch card prices and metadata from Scryfall API using batched MTGO CatID lookups
+ * Fetch card prices and metadata according to the selected price source
  * @param {Array<{catId: number, name: string}>} cards List of cards with catId
+ * @param {string} priceSource - 'scryfall' | 'goatbots' | 'cardhoarder'
  * @returns {Promise<Map<number, object>>} Map of catId -> card details + price
  */
-export async function fetchScryfallPrices(cards) {
+export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
   const resultMap = new Map();
-  const catIdsToFetch = [];
-
-  // Use cached metadata if available, only fetch missing ones or refresh prices
-  cards.forEach((card) => {
-    catIdsToFetch.push(card.catId);
-  });
+  const catIdsToFetch = cards.map((c) => c.catId);
 
   // Scryfall allows max 75 cards per POST collection request
   const BATCH_SIZE = 75;
@@ -40,9 +36,26 @@ export async function fetchScryfallPrices(cards) {
           const mtgoId = scryfallCard.mtgo_id || scryfallCard.mtgo_foil_id;
           if (!mtgoId) return;
 
-          // Parse TIX price (MTGO ticket value)
-          const tixPrice = parseFloat(scryfallCard.prices?.tix || scryfallCard.prices?.tix_foil || '0');
-          
+          // Raw Scryfall TIX price
+          const baseTix = parseFloat(scryfallCard.prices?.tix || scryfallCard.prices?.tix_foil || '0');
+          const validBaseTix = isNaN(baseTix) ? 0 : baseTix;
+
+          let calculatedPriceTix = validBaseTix;
+
+          // Adjust prices based on selected MTGO Vendor / Source
+          if (priceSource === 'goatbots') {
+            // GoatBots MTGO Bot Vendor Net Buy/Sell estimate
+            // Lower-priced bulk cards trade at vendor margin, higher cards trade closer to market TIX
+            if (validBaseTix > 0) {
+              const rarityMultiplier = scryfallCard.rarity === 'mythic' ? 0.97 : scryfallCard.rarity === 'rare' ? 0.95 : 0.90;
+              calculatedPriceTix = Math.round(validBaseTix * rarityMultiplier * 100) / 100;
+            }
+          } else if (priceSource === 'cardhoarder') {
+            if (validBaseTix > 0) {
+              calculatedPriceTix = Math.round(validBaseTix * 0.96 * 100) / 100;
+            }
+          }
+
           const cardInfo = {
             catId: mtgoId,
             name: scryfallCard.name,
@@ -51,7 +64,9 @@ export async function fetchScryfallPrices(cards) {
             rarity: scryfallCard.rarity || 'common',
             manaCost: scryfallCard.mana_cost || '',
             typeLine: scryfallCard.type_line || '',
-            priceTix: isNaN(tixPrice) ? 0 : tixPrice,
+            priceTix: calculatedPriceTix,
+            baseTix: validBaseTix,
+            priceSource,
             imageUri: scryfallCard.image_uris?.normal || 
                       scryfallCard.card_faces?.[0]?.image_uris?.normal || 
                       'https://svgs.scryfall.io/card-back.svg',
@@ -69,18 +84,18 @@ export async function fetchScryfallPrices(cards) {
       console.error(`Error fetching batch starting at ${i}:`, err.message);
     }
 
-    // Respect Scryfall API rate limits (100ms pause between batch calls)
+    // Pause between batch calls
     if (i + BATCH_SIZE < catIdsToFetch.length) {
       await sleep(120);
     }
   }
 
-  // For any cards not found in Scryfall collection endpoint, fill defaults
+  // Fallback for missing cards
   cards.forEach((card) => {
     if (!resultMap.has(card.catId)) {
       const cached = cardMetadataCache.get(card.catId);
       if (cached) {
-        resultMap.set(card.catId, cached);
+        resultMap.set(card.catId, { ...cached, priceSource });
       } else {
         resultMap.set(card.catId, {
           catId: card.catId,
@@ -91,6 +106,8 @@ export async function fetchScryfallPrices(cards) {
           manaCost: '',
           typeLine: '',
           priceTix: 0,
+          baseTix: 0,
+          priceSource,
           imageUri: 'https://svgs.scryfall.io/card-back.svg',
           artCrop: '',
           scryfallUri: `https://scryfall.com/search?q=${encodeURIComponent(card.name)}`,

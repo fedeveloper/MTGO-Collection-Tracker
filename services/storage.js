@@ -5,24 +5,19 @@ const DATA_DIR = path.resolve(process.cwd(), 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
-// Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Default settings (English by default)
 const DEFAULT_SETTINGS = {
-  scheduleIntervalMinutes: 60, // Default 60 minutes
+  scheduleIntervalMinutes: 60,
   autoSyncEnabled: true,
   priceSource: 'scryfall', // 'scryfall' | 'goatbots'
-  language: 'en', // 'en' (default) | 'it'
+  language: 'en',
   lastSyncTime: null,
   nextSyncTime: null
 };
 
-/**
- * Read settings from disk
- */
 export function getSettings() {
   if (!fs.existsSync(SETTINGS_FILE)) {
     saveSettings(DEFAULT_SETTINGS);
@@ -36,33 +31,38 @@ export function getSettings() {
   }
 }
 
-/**
- * Save settings to disk
- */
 export function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
 }
 
 /**
- * Read history snapshots
+ * Read history snapshots, optionally filtered by priceSource
+ * @param {string} [priceSource] - Filter snapshots by priceSource ('scryfall' | 'goatbots')
  */
-export function getHistory() {
+export function getHistory(priceSource) {
   if (!fs.existsSync(HISTORY_FILE)) {
     return [];
   }
   try {
     const raw = fs.readFileSync(HISTORY_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const allHistory = JSON.parse(raw);
+    
+    if (priceSource) {
+      return allHistory.filter((s) => s.priceSource === priceSource || (!s.priceSource && priceSource === 'scryfall'));
+    }
+    return allHistory;
   } catch {
     return [];
   }
 }
 
 /**
- * Save a new price snapshot into history
+ * Save a new price snapshot into history tagged with its priceSource
+ * @param {Array<{catId: number, quantity: number, priceTix: number}>} cardsWithPrices 
+ * @param {string} priceSource 
  */
-export function addSnapshot(cardsWithPrices) {
-  const history = getHistory();
+export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
+  const allHistory = getHistory();
   const timestamp = new Date().toISOString();
 
   let totalValueTix = 0;
@@ -76,27 +76,32 @@ export function addSnapshot(cardsWithPrices) {
 
   const newSnapshot = {
     timestamp,
+    priceSource,
     totalValueTix: Math.round(totalValueTix * 100) / 100,
     cardPrices
   };
 
-  history.push(newSnapshot);
+  allHistory.push(newSnapshot);
 
   // Keep up to 500 recent snapshots
   const maxHistory = 500;
-  const trimmedHistory = history.slice(-maxHistory);
+  const trimmedHistory = allHistory.slice(-maxHistory);
 
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(trimmedHistory, null, 2), 'utf-8');
   return newSnapshot;
 }
 
 /**
- * Calculate price movements comparing current prices to previous snapshots
+ * Calculate price movements comparing current prices to previous snapshots of THE SAME price source
+ * @param {Array<object>} cards Current cards list with prices
+ * @param {string} priceSource Current price source
+ * @returns {Array<object>} Cards enriched with deltaTix, deltaPercent, trend
  */
-export function calculateMovements(cards) {
-  const history = getHistory();
+export function calculateMovements(cards, priceSource = 'scryfall') {
+  // Get history filtered strictly for this price source to prevent cross-source spikes
+  const sourceHistory = getHistory(priceSource);
 
-  if (history.length <= 1) {
+  if (sourceHistory.length <= 1) {
     return cards.map((card) => ({
       ...card,
       previousPriceTix: card.priceTix,
@@ -106,7 +111,8 @@ export function calculateMovements(cards) {
     }));
   }
 
-  const prevSnapshot = history[history.length - 2];
+  // Previous snapshot of the SAME price source
+  const prevSnapshot = sourceHistory[sourceHistory.length - 2];
   const prevPrices = prevSnapshot.cardPrices || {};
 
   return cards.map((card) => {

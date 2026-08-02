@@ -3,13 +3,12 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { parseDekFile, parseDekContent } from './services/dekParser.js';
-import { fetchScryfallPrices } from './services/priceFetcher.js';
+import { fetchCollectionPrices } from './services/priceFetcher.js';
 import { getSettings, saveSettings, getHistory, addSnapshot, calculateMovements } from './services/storage.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Allow large payloads for XML uploads
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
@@ -19,7 +18,6 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Check root Collection.dek or data/Collection.dek
 const ROOT_DEK = path.resolve(process.cwd(), 'Collection.dek');
 const DATA_DEK = path.join(DATA_DIR, 'Collection.dek');
 
@@ -29,14 +27,13 @@ function getActiveDekPath() {
   return null;
 }
 
-// Cache of currently enriched cards
 let cachedEnrichedCards = [];
 let isSyncing = false;
 let syncProgress = { current: 0, total: 0, status: 'idle' };
 let syncIntervalTimer = null;
 
 /**
- * Perform a full price check and update snapshots
+ * Perform a full price check and update snapshots according to the selected priceSource
  */
 async function performPriceSync() {
   const activeDek = getActiveDekPath();
@@ -54,7 +51,10 @@ async function performPriceSync() {
   try {
     isSyncing = true;
     syncProgress = { current: 0, total: 0, status: 'starting' };
-    console.log(`[Sync] Starting MTGO collection price sync from ${activeDek}...`);
+    const settings = getSettings();
+    const priceSource = settings.priceSource || 'scryfall';
+
+    console.log(`[Sync] Starting MTGO collection price sync from ${activeDek} using source [${priceSource}]...`);
 
     const parsedCards = parseDekFile(activeDek);
     if (parsedCards.length === 0) {
@@ -66,8 +66,8 @@ async function performPriceSync() {
     syncProgress.total = parsedCards.length;
     syncProgress.status = 'fetching_prices';
 
-    // Fetch prices from Scryfall API
-    const priceMap = await fetchScryfallPrices(parsedCards);
+    // Fetch prices for selected source (Scryfall vs GoatBots vs Cardhoarder)
+    const priceMap = await fetchCollectionPrices(parsedCards, priceSource);
 
     // Merge parsed cards with fetched details
     const merged = parsedCards.map((card) => {
@@ -83,14 +83,12 @@ async function performPriceSync() {
       };
     });
 
-    // Add snapshot
-    addSnapshot(merged);
+    // Add snapshot tagged with priceSource
+    addSnapshot(merged, priceSource);
 
-    // Calculate price movements compared to previous snapshots
-    cachedEnrichedCards = calculateMovements(merged);
+    // Calculate price movements compared to previous snapshots of the SAME source
+    cachedEnrichedCards = calculateMovements(merged, priceSource);
 
-    // Update settings with sync time
-    const settings = getSettings();
     const now = new Date();
     const nextSync = new Date(now.getTime() + (settings.scheduleIntervalMinutes || 60) * 60 * 1000);
     
@@ -99,7 +97,7 @@ async function performPriceSync() {
     saveSettings(settings);
 
     syncProgress = { current: parsedCards.length, total: parsedCards.length, status: 'completed' };
-    console.log(`[Sync] Price sync finished successfully for ${merged.length} MTGO cards.`);
+    console.log(`[Sync] Price sync finished successfully for ${merged.length} MTGO cards using [${priceSource}].`);
     return cachedEnrichedCards;
   } catch (error) {
     console.error('[Sync Error]', error);
@@ -110,9 +108,6 @@ async function performPriceSync() {
   }
 }
 
-/**
- * Setup recurring scheduler based on user settings
- */
 function setupScheduler() {
   if (syncIntervalTimer) {
     clearInterval(syncIntervalTimer);
@@ -139,11 +134,13 @@ app.get('/api/collection', async (req, res) => {
   try {
     const dekPath = getActiveDekPath();
     const hasCollection = !!dekPath;
+    const settings = getSettings();
+    const currentSource = settings.priceSource || 'scryfall';
 
     if (hasCollection && cachedEnrichedCards.length === 0 && !isSyncing) {
       await performPriceSync();
     } else if (hasCollection && cachedEnrichedCards.length > 0) {
-      cachedEnrichedCards = calculateMovements(cachedEnrichedCards);
+      cachedEnrichedCards = calculateMovements(cachedEnrichedCards, currentSource);
     }
 
     res.json({
@@ -165,17 +162,14 @@ app.post('/api/upload-dek', async (req, res) => {
       return res.status(400).json({ error: 'Nessun contenuto XML valido fornito.' });
     }
 
-    // Validate XML parsing
     const parsed = parseDekContent(xmlContent);
     if (parsed.length === 0) {
       return res.status(400).json({ error: 'Il file caricato non contiene carte MTGO nel formato <Cards CatID="..." />.' });
     }
 
-    // Write file to data/Collection.dek
     fs.writeFileSync(DATA_DEK, xmlContent, 'utf-8');
     console.log(`[Upload] New MTGO collection file uploaded: ${filename || 'Collection.dek'} (${parsed.length} cards).`);
 
-    // Reset cache and trigger sync
     cachedEnrichedCards = [];
     const cards = await performPriceSync();
 
@@ -197,13 +191,14 @@ app.get('/api/export/csv', (req, res) => {
       return res.status(400).send('Nessuna carta presente nella collezione.');
     }
 
-    const headers = ['CatID', 'Nome', 'Set', 'Rarita', 'Quantita', 'Prezzo TIX', 'Valore Totale TIX', 'Variazione %', 'Trend'];
+    const headers = ['CatID', 'Nome', 'Set', 'Rarita', 'Quantita', 'Fonte Prezzo', 'Prezzo TIX', 'Valore Totale TIX', 'Variazione %', 'Trend'];
     const rows = cachedEnrichedCards.map((c) => [
       c.catId,
       `"${(c.name || '').replace(/"/g, '""')}"`,
       `"${c.set || ''}"`,
       `"${c.rarity || ''}"`,
       c.quantity || 1,
+      `"${c.priceSource || 'scryfall'}"`,
       (c.priceTix || 0).toFixed(2),
       ((c.priceTix || 0) * (c.quantity || 1)).toFixed(2),
       `${(c.deltaPercent || 0)}%`,
@@ -232,7 +227,9 @@ app.post('/api/sync', async (req, res) => {
 
 // GET /api/history
 app.get('/api/history', (req, res) => {
-  res.json(getHistory());
+  const settings = getSettings();
+  const source = req.query.source || settings.priceSource || 'scryfall';
+  res.json(getHistory(source));
 });
 
 // GET /api/settings
@@ -241,13 +238,22 @@ app.get('/api/settings', (req, res) => {
 });
 
 // POST /api/settings
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', async (req, res) => {
   try {
     const current = getSettings();
+    const sourceChanged = req.body.priceSource && req.body.priceSource !== current.priceSource;
     const updated = { ...current, ...req.body };
+    
     saveSettings(updated);
     setupScheduler();
-    res.json({ success: true, settings: updated });
+
+    let cards = cachedEnrichedCards;
+    if (sourceChanged) {
+      console.log(`[Settings] Price source changed to [${updated.priceSource}]. Triggering sync...`);
+      cards = await performPriceSync();
+    }
+
+    res.json({ success: true, settings: updated, cards });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

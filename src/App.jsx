@@ -23,22 +23,26 @@ export function App() {
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   const currentLang = settings?.language || 'en';
+  const currentSource = settings?.priceSource || 'scryfall';
   const t = translations[currentLang] || translations.en;
 
   // Fetch all initial data
   const fetchData = async () => {
     try {
-      const [colRes, histRes, setRes] = await Promise.all([
+      const setRes = await axios.get('/api/settings');
+      const currentSettings = setRes.data || {};
+      setSettings(currentSettings);
+
+      const sourceParam = currentSettings.priceSource || 'scryfall';
+      const [colRes, histRes] = await Promise.all([
         axios.get('/api/collection'),
-        axios.get('/api/history'),
-        axios.get('/api/settings')
+        axios.get(`/api/history?source=${sourceParam}`)
       ]);
 
       setHasCollection(colRes.data.hasCollection ?? true);
       setCards(colRes.data.cards || []);
       setIsSyncing(colRes.data.isSyncing || false);
       setHistory(histRes.data || []);
-      setSettings(setRes.data || {});
     } catch (err) {
       console.error('Error fetching collection data:', err);
     } finally {
@@ -49,7 +53,6 @@ export function App() {
   useEffect(() => {
     fetchData();
 
-    // Poll status every 15 seconds
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, []);
@@ -61,7 +64,7 @@ export function App() {
       if (res.data && res.data.cards) {
         setCards(res.data.cards);
         const [histRes, setRes] = await Promise.all([
-          axios.get('/api/history'),
+          axios.get(`/api/history?source=${currentSource}`),
           axios.get('/api/settings')
         ]);
         setHistory(histRes.data || []);
@@ -79,6 +82,12 @@ export function App() {
       const res = await axios.post('/api/settings', newSettings);
       if (res.data && res.data.settings) {
         setSettings(res.data.settings);
+        if (res.data.cards) setCards(res.data.cards);
+
+        // Refresh history for the newly selected price source
+        const newSource = res.data.settings.priceSource || 'scryfall';
+        const histRes = await axios.get(`/api/history?source=${newSource}`);
+        setHistory(histRes.data || []);
       }
     } catch (err) {
       console.error('Save settings failed:', err);
@@ -97,7 +106,7 @@ export function App() {
         setCards(res.data.cards);
         setHasCollection(true);
         const [histRes, setRes] = await Promise.all([
-          axios.get('/api/history'),
+          axios.get(`/api/history?source=${currentSource}`),
           axios.get('/api/settings')
         ]);
         setHistory(histRes.data || []);
@@ -144,7 +153,7 @@ export function App() {
       <DashboardStats cards={cards} lang={currentLang} />
 
       {/* Portfolio History Line Chart */}
-      <PortfolioChart history={history} lang={currentLang} />
+      <PortfolioChart history={history} lang={currentLang} priceSource={currentSource} />
 
       {/* Cards Table & Grid View with Gainers/Losers Highlights */}
       <CardGridTable 
