@@ -26,7 +26,6 @@ export function App() {
   const currentSource = settings?.priceSource || 'scryfall';
   const t = translations[currentLang] || translations.en;
 
-  // Fetch all initial data
   const fetchData = async () => {
     try {
       const setRes = await axios.get('/api/settings');
@@ -84,7 +83,6 @@ export function App() {
         setSettings(res.data.settings);
         if (res.data.cards) setCards(res.data.cards);
 
-        // Refresh history for the newly selected price source
         const newSource = res.data.settings.priceSource || 'scryfall';
         const histRes = await axios.get(`/api/history?source=${newSource}`);
         setHistory(histRes.data || []);
@@ -96,6 +94,18 @@ export function App() {
 
   const handleToggleLang = (newLang) => {
     handleSaveSettings({ ...settings, language: newLang });
+  };
+
+  const handleDeleteSnapshot = async (timestamp) => {
+    try {
+      const res = await axios.delete('/api/history', { data: { timestamp } });
+      if (res.data) {
+        if (res.data.history) setHistory(res.data.history);
+        if (res.data.cards) setCards(res.data.cards);
+      }
+    } catch (err) {
+      console.error('Delete snapshot failed:', err);
+    }
   };
 
   const handleUploadSuccess = async (xmlContent, filename) => {
@@ -152,8 +162,13 @@ export function App() {
       {/* Metric Cards */}
       <DashboardStats cards={cards} lang={currentLang} />
 
-      {/* Portfolio History Line Chart */}
-      <PortfolioChart history={history} lang={currentLang} priceSource={currentSource} />
+      {/* Portfolio History Line Chart with click-to-delete support */}
+      <PortfolioChart 
+        history={history} 
+        lang={currentLang} 
+        priceSource={currentSource} 
+        onDeleteSnapshot={handleDeleteSnapshot}
+      />
 
       {/* Cards Table & Grid View with Gainers/Losers Highlights */}
       <CardGridTable 

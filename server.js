@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { parseDekFile, parseDekContent } from './services/dekParser.js';
 import { fetchCollectionPrices } from './services/priceFetcher.js';
-import { getSettings, saveSettings, getHistory, addSnapshot, calculateMovements } from './services/storage.js';
+import { getSettings, saveSettings, getHistory, addSnapshot, deleteSnapshot, calculateMovements } from './services/storage.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,9 +32,6 @@ let isSyncing = false;
 let syncProgress = { current: 0, total: 0, status: 'idle' };
 let syncIntervalTimer = null;
 
-/**
- * Perform a full price check and update snapshots according to the selected priceSource
- */
 async function performPriceSync() {
   const activeDek = getActiveDekPath();
   if (!activeDek) {
@@ -66,10 +63,8 @@ async function performPriceSync() {
     syncProgress.total = parsedCards.length;
     syncProgress.status = 'fetching_prices';
 
-    // Fetch prices for selected source (Scryfall vs GoatBots vs Cardhoarder)
     const priceMap = await fetchCollectionPrices(parsedCards, priceSource);
 
-    // Merge parsed cards with fetched details
     const merged = parsedCards.map((card) => {
       const details = priceMap.get(card.catId) || {};
       const priceTix = details.priceTix || 0;
@@ -83,10 +78,7 @@ async function performPriceSync() {
       };
     });
 
-    // Add snapshot tagged with priceSource
     addSnapshot(merged, priceSource);
-
-    // Calculate price movements compared to previous snapshots of the SAME source
     cachedEnrichedCards = calculateMovements(merged, priceSource);
 
     const now = new Date();
@@ -129,7 +121,6 @@ function setupScheduler() {
 
 // REST API Endpoints
 
-// GET /api/collection
 app.get('/api/collection', async (req, res) => {
   try {
     const dekPath = getActiveDekPath();
@@ -154,7 +145,6 @@ app.get('/api/collection', async (req, res) => {
   }
 });
 
-// POST /api/upload-dek
 app.post('/api/upload-dek', async (req, res) => {
   try {
     const { xmlContent, filename } = req.body;
@@ -184,7 +174,6 @@ app.post('/api/upload-dek', async (req, res) => {
   }
 });
 
-// GET /api/export/csv
 app.get('/api/export/csv', (req, res) => {
   try {
     if (cachedEnrichedCards.length === 0) {
@@ -215,7 +204,6 @@ app.get('/api/export/csv', (req, res) => {
   }
 });
 
-// POST /api/sync
 app.post('/api/sync', async (req, res) => {
   try {
     const cards = await performPriceSync();
@@ -225,19 +213,38 @@ app.post('/api/sync', async (req, res) => {
   }
 });
 
-// GET /api/history
 app.get('/api/history', (req, res) => {
   const settings = getSettings();
   const source = req.query.source || settings.priceSource || 'scryfall';
   res.json(getHistory(source));
 });
 
-// GET /api/settings
+// DELETE /api/history
+app.delete('/api/history', (req, res) => {
+  try {
+    const { timestamp } = req.body;
+    if (!timestamp) {
+      return res.status(400).json({ error: 'Nessun timestamp specificato.' });
+    }
+    deleteSnapshot(timestamp);
+    const settings = getSettings();
+    const source = settings.priceSource || 'scryfall';
+    
+    // Recalculate movements with updated history
+    if (cachedEnrichedCards.length > 0) {
+      cachedEnrichedCards = calculateMovements(cachedEnrichedCards, source);
+    }
+    
+    res.json({ success: true, history: getHistory(source), cards: cachedEnrichedCards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/settings', (req, res) => {
   res.json(getSettings());
 });
 
-// POST /api/settings
 app.post('/api/settings', async (req, res) => {
   try {
     const current = getSettings();
@@ -259,7 +266,6 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
-// Serve Vite frontend in production if built
 const distPath = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
@@ -268,7 +274,6 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-// Start Server
 app.listen(PORT, () => {
   console.log(`[MTGO Tracker Backend] Running on http://localhost:${PORT}`);
   setupScheduler();

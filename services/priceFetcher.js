@@ -42,10 +42,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
 
           let calculatedPriceTix = validBaseTix;
 
-          // Adjust prices based on selected MTGO Vendor / Source
           if (priceSource === 'goatbots') {
-            // GoatBots MTGO Bot Vendor Net Buy/Sell estimate
-            // Lower-priced bulk cards trade at vendor margin, higher cards trade closer to market TIX
             if (validBaseTix > 0) {
               const rarityMultiplier = scryfallCard.rarity === 'mythic' ? 0.97 : scryfallCard.rarity === 'rare' ? 0.95 : 0.90;
               calculatedPriceTix = Math.round(validBaseTix * rarityMultiplier * 100) / 100;
@@ -73,6 +70,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
             artCrop: scryfallCard.image_uris?.art_crop || 
                      scryfallCard.card_faces?.[0]?.image_uris?.art_crop || '',
             scryfallUri: scryfallCard.scryfall_uri || `https://scryfall.com/card/${scryfallCard.set}/${scryfallCard.collector_number}`,
+            cardhoarderUri: scryfallCard.purchase_uris?.cardhoarder || `https://www.cardhoarder.com/cards/id/${mtgoId}`,
             updatedAt: new Date().toISOString()
           };
 
@@ -84,7 +82,6 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
       console.error(`Error fetching batch starting at ${i}:`, err.message);
     }
 
-    // Pause between batch calls
     if (i + BATCH_SIZE < catIdsToFetch.length) {
       await sleep(120);
     }
@@ -111,6 +108,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
           imageUri: 'https://svgs.scryfall.io/card-back.svg',
           artCrop: '',
           scryfallUri: `https://scryfall.com/search?q=${encodeURIComponent(card.name)}`,
+          cardhoarderUri: `https://www.cardhoarder.com/cards/id/${card.catId}`,
           updatedAt: new Date().toISOString()
         });
       }

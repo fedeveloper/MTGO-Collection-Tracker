@@ -26,6 +26,9 @@ export const translations = {
     chartTitle: "Collection Value Over Time",
     savedSnapshots: "Saved snapshots:",
     chartPlaceholder: "Historical portfolio data will appear after scheduled price checks.",
+    clickPointHint: "💡 Click any data point on the chart to delete that snapshot",
+    deleteSnapshotTitle: "Delete Snapshot",
+    deleteSnapshotConfirm: "Are you sure you want to delete this snapshot?",
 
     // Filters & Sorting
     allCards: "All Cards",
@@ -125,6 +128,9 @@ export const translations = {
     chartTitle: "Andamento Valore Collezione nel Tempo",
     savedSnapshots: "Snapshots salvati:",
     chartPlaceholder: "I dati storici del portafoglio verranno visualizzati dopo i primi controlli schedulati dei prezzi.",
+    clickPointHint: "💡 Clicca su un punto del grafico per eliminare quello snapshot",
+    deleteSnapshotTitle: "Elimina Snapshot",
+    deleteSnapshotConfirm: "Sei sicuro di voler eliminare questo snapshot?",
 
     // Filters & Sorting
     allCards: "Tutte le carte",

@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 const DEFAULT_SETTINGS = {
   scheduleIntervalMinutes: 60,
   autoSyncEnabled: true,
-  priceSource: 'scryfall', // 'scryfall' | 'goatbots'
+  priceSource: 'scryfall',
   language: 'en',
   lastSyncTime: null,
   nextSyncTime: null
@@ -37,7 +37,6 @@ export function saveSettings(settings) {
 
 /**
  * Read history snapshots, optionally filtered by priceSource
- * @param {string} [priceSource] - Filter snapshots by priceSource ('scryfall' | 'goatbots')
  */
 export function getHistory(priceSource) {
   if (!fs.existsSync(HISTORY_FILE)) {
@@ -57,9 +56,7 @@ export function getHistory(priceSource) {
 }
 
 /**
- * Save a new price snapshot into history tagged with its priceSource
- * @param {Array<{catId: number, quantity: number, priceTix: number}>} cardsWithPrices 
- * @param {string} priceSource 
+ * Save a new price snapshot into history
  */
 export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
   const allHistory = getHistory();
@@ -83,7 +80,6 @@ export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
 
   allHistory.push(newSnapshot);
 
-  // Keep up to 500 recent snapshots
   const maxHistory = 500;
   const trimmedHistory = allHistory.slice(-maxHistory);
 
@@ -92,13 +88,20 @@ export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
 }
 
 /**
+ * Delete a snapshot by timestamp
+ * @param {string} timestamp 
+ */
+export function deleteSnapshot(timestamp) {
+  const allHistory = getHistory();
+  const filtered = allHistory.filter((s) => s.timestamp !== timestamp);
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(filtered, null, 2), 'utf-8');
+  return filtered;
+}
+
+/**
  * Calculate price movements comparing current prices to previous snapshots of THE SAME price source
- * @param {Array<object>} cards Current cards list with prices
- * @param {string} priceSource Current price source
- * @returns {Array<object>} Cards enriched with deltaTix, deltaPercent, trend
  */
 export function calculateMovements(cards, priceSource = 'scryfall') {
-  // Get history filtered strictly for this price source to prevent cross-source spikes
   const sourceHistory = getHistory(priceSource);
 
   if (sourceHistory.length <= 1) {
@@ -111,7 +114,6 @@ export function calculateMovements(cards, priceSource = 'scryfall') {
     }));
   }
 
-  // Previous snapshot of the SAME price source
   const prevSnapshot = sourceHistory[sourceHistory.length - 2];
   const prevPrices = prevSnapshot.cardPrices || {};
 

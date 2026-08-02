@@ -9,8 +9,9 @@ export function CardDetailModal({ card, onClose, lang = 'en' }) {
   const isGainer = card.trend === 'up';
   const isLoser = card.trend === 'down';
 
+  // Direct card URLs
   const goatbotsUrl = `https://www.goatbots.com/card/${encodeURIComponent(card.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`;
-  const cardhoarderUrl = `https://www.cardhoarder.com/cards?data%5Bsearch%5D=${encodeURIComponent(card.name)}`;
+  const cardhoarderUrl = card.cardhoarderUri || `https://www.cardhoarder.com/cards/id/${card.catId}`;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
