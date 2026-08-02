@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  mtgo-tracker:
+    build: .
+    container_name: mtgo-collection-tracker
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
