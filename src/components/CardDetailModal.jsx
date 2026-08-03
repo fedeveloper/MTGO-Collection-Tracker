@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ExternalLink, TrendingUp, TrendingDown, ShoppingBag, Link as LinkIcon, Check, Trash2 } from 'lucide-react';
+import { X, ExternalLink, TrendingUp, TrendingDown, ShoppingBag, Link as LinkIcon, Check, Trash2, Award, ShieldAlert, Sparkles } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
 export function CardDetailModal({ card, onClose, onSaveCustomLink, lang = 'en' }) {
@@ -9,8 +9,8 @@ export function CardDetailModal({ card, onClose, onSaveCustomLink, lang = 'en' }
   const [customUrlInput, setCustomUrlInput] = useState(card.customUrl || '');
   const [isSavingLink, setIsSavingLink] = useState(false);
 
-  const isGainer = card.trend === 'up';
-  const isLoser = card.trend === 'down';
+  const isGainer = card.deltaTix > 0;
+  const isLoser = card.deltaTix < 0;
 
   const goatbotsUrl = `https://www.goatbots.com/card/${encodeURIComponent(card.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'))}`;
   const cardhoarderUrl = card.cardhoarderUri || `https://www.cardhoarder.com/cards/id/${card.catId}`;
@@ -43,28 +43,33 @@ export function CardDetailModal({ card, onClose, onSaveCustomLink, lang = 'en' }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '620px' }}>
+      <div className="modal-content glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
         <button className="modal-close" onClick={onClose}>
           <X size={20} />
         </button>
 
-        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '20px' }}>
-          {/* Card Image */}
-          <div style={{ flex: '0 0 200px', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'flex-start' }}>
+          {/* Card Image - Fixed aspect ratio & objectFit to prevent stretching */}
+          <div style={{ flex: '0 0 220px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
             <img 
               src={card.imageUri} 
               alt={card.name}
-              style={{ width: '100%', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }} 
+              style={{ 
+                width: '100%', 
+                height: 'auto', 
+                maxHeight: '340px', 
+                objectFit: 'contain', 
+                borderRadius: '12px', 
+                boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                aspectRatio: '5 / 7'
+              }} 
             />
           </div>
 
           {/* Card Info & Metrics */}
           <div style={{ flex: '1 1 260px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '4px' }}>{card.name}</h2>
-            </div>
-            
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '4px' }}>{card.name}</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
               <span style={{ color: 'var(--accent-cyan)', fontWeight: '700', textTransform: 'uppercase' }}>{card.setName || card.set}</span> • <span style={{ textTransform: 'capitalize' }}>{card.rarity}</span> • CatID: {card.catId}
               {card.isCustomLinked && (
                 <span style={{ marginLeft: '8px', background: 'rgba(99,102,241,0.2)', color: 'var(--accent-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: '700' }}>
@@ -73,11 +78,38 @@ export function CardDetailModal({ card, onClose, onSaveCustomLink, lang = 'en' }
               )}
             </div>
 
+            {/* Trading Signal Banner - i18n Translated */}
+            {card.signal === 'take_profit' && (
+              <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fbbf24', padding: '10px 14px', borderRadius: '10px', marginBottom: '14px', fontSize: '0.85rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShoppingBag size={18} />
+                <span>{t.bannerTakeProfit}</span>
+              </div>
+            )}
+            {card.signal === 'near_peak' && (
+              <div style={{ background: 'rgba(6, 182, 212, 0.15)', border: '1px solid rgba(6, 182, 212, 0.4)', color: 'var(--accent-cyan)', padding: '10px 14px', borderRadius: '10px', marginBottom: '14px', fontSize: '0.85rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={18} />
+                <span>{t.bannerNearPeak}</span>
+              </div>
+            )}
+            {card.signal === 'stop_loss' && (
+              <div style={{ background: 'var(--loser-bg)', border: '1px solid var(--loser-border)', color: 'var(--loser-color)', padding: '10px 14px', borderRadius: '10px', marginBottom: '14px', fontSize: '0.85rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldAlert size={18} />
+                <span>{t.bannerStopLoss}</span>
+              </div>
+            )}
+
             {/* Price Movement Summary */}
             <div style={{ background: 'rgba(0,0,0,0.3)', padding: '14px', borderRadius: '10px', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t.currentPrice}</span>
                 <span style={{ fontSize: '1.2rem', fontWeight: '800', fontFamily: 'var(--font-mono)' }}>{card.priceTix.toFixed(2)} TIX</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t.timeZeroPriceLabel}</span>
+                <span style={{ fontSize: '0.95rem', fontWeight: '700', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                  {(card.timeZeroPrice || card.priceTix).toFixed(2)} TIX
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

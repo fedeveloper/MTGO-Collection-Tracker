@@ -12,6 +12,7 @@ import { translations } from './i18n/translations';
 
 export function App() {
   const [cards, setCards] = useState([]);
+  const [summary, setSummary] = useState({});
   const [hasCollection, setHasCollection] = useState(true);
   const [history, setHistory] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -24,6 +25,7 @@ export function App() {
 
   const currentLang = settings?.language || 'en';
   const currentSource = settings?.priceSource || 'scryfall';
+  const currentTimeframe = settings?.timeframe || 'time_zero';
   const t = translations[currentLang] || translations.en;
 
   const fetchData = async () => {
@@ -33,13 +35,16 @@ export function App() {
       setSettings(currentSettings);
 
       const sourceParam = currentSettings.priceSource || 'scryfall';
+      const timeframeParam = currentSettings.timeframe || 'time_zero';
+
       const [colRes, histRes] = await Promise.all([
-        axios.get('/api/collection'),
+        axios.get(`/api/collection?timeframe=${timeframeParam}`),
         axios.get(`/api/history?source=${sourceParam}`)
       ]);
 
       setHasCollection(colRes.data.hasCollection ?? true);
       setCards(colRes.data.cards || []);
+      setSummary(colRes.data.summary || {});
       setIsSyncing(colRes.data.isSyncing || false);
       setHistory(histRes.data || []);
     } catch (err) {
@@ -62,6 +67,7 @@ export function App() {
       const res = await axios.post('/api/sync');
       if (res.data && res.data.cards) {
         setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
         const [histRes, setRes] = await Promise.all([
           axios.get(`/api/history?source=${currentSource}`),
           axios.get('/api/settings')
@@ -82,6 +88,7 @@ export function App() {
       if (res.data && res.data.settings) {
         setSettings(res.data.settings);
         if (res.data.cards) setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
 
         const newSource = res.data.settings.priceSource || 'scryfall';
         const histRes = await axios.get(`/api/history?source=${newSource}`);
@@ -90,6 +97,10 @@ export function App() {
     } catch (err) {
       console.error('Save settings failed:', err);
     }
+  };
+
+  const handleChangeTimeframe = (newTimeframe) => {
+    handleSaveSettings({ ...settings, timeframe: newTimeframe });
   };
 
   const handleToggleLang = (newLang) => {
@@ -102,6 +113,7 @@ export function App() {
       if (res.data) {
         if (res.data.history) setHistory(res.data.history);
         if (res.data.cards) setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
       }
     } catch (err) {
       console.error('Delete snapshot failed:', err);
@@ -113,6 +125,7 @@ export function App() {
       const res = await axios.post('/api/card/custom-link', { catId, scryfallUrl });
       if (res.data && res.data.cards) {
         setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
         const updated = res.data.cards.find((c) => c.catId === catId);
         if (updated) setSelectedCard(updated);
       }
@@ -127,6 +140,7 @@ export function App() {
       const res = await axios.post('/api/upload-dek', { xmlContent, filename });
       if (res.data && res.data.cards) {
         setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
         setHasCollection(true);
         const [histRes, setRes] = await Promise.all([
           axios.get(`/api/history?source=${currentSource}`),
@@ -172,8 +186,8 @@ export function App() {
         onToggleLang={handleToggleLang}
       />
 
-      {/* Metric Cards */}
-      <DashboardStats cards={cards} lang={currentLang} />
+      {/* Metric Cards & P&L Summary */}
+      <DashboardStats cards={cards} summary={summary} lang={currentLang} />
 
       {/* Portfolio History Line Chart */}
       <PortfolioChart 
@@ -183,10 +197,12 @@ export function App() {
         onDeleteSnapshot={handleDeleteSnapshot}
       />
 
-      {/* Cards Table & Grid View with Gainers/Losers Highlights */}
+      {/* Cards Table & Grid View with Timeframe selector & Trading Signals */}
       <CardGridTable 
         cards={cards} 
         onSelectCard={(card) => setSelectedCard(card)}
+        timeframe={currentTimeframe}
+        onChangeTimeframe={handleChangeTimeframe}
         lang={currentLang}
       />
 

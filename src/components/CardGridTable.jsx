@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Search, TrendingUp, TrendingDown, LayoutGrid, List, Sparkles } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, LayoutGrid, List, Sparkles, ShoppingBag, Clock, ShieldAlert } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
-export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
+export function CardGridTable({ cards = [], onSelectCard, timeframe = 'time_zero', onChangeTimeframe, lang = 'en' }) {
   const t = translations[lang] || translations.en;
 
-  const [filterMode, setFilterMode] = useState('all');
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'gainers' | 'losers' | 'sell_signals' | 'valuable'
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('price_desc');
   const [viewStyle, setViewStyle] = useState('grid');
@@ -17,8 +17,9 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
 
     if (!matchesSearch) return false;
 
-    if (filterMode === 'gainers') return card.trend === 'up';
-    if (filterMode === 'losers') return card.trend === 'down';
+    if (filterMode === 'gainers') return card.trend === 'up' || card.timeZeroDeltaTix > 0;
+    if (filterMode === 'losers') return card.trend === 'down' || card.timeZeroDeltaTix < 0;
+    if (filterMode === 'sell_signals') return card.signal === 'take_profit' || card.signal === 'near_peak';
     if (filterMode === 'valuable') return (card.priceTix || 0) >= 1.0;
 
     return true;
@@ -34,8 +35,56 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
     return 0;
   });
 
+  const renderSignalBadge = (card) => {
+    if (card.signal === 'take_profit') {
+      return (
+        <span className="stat-badge" style={{ background: 'rgba(245, 158, 11, 0.18)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)', boxShadow: '0 0 12px rgba(245, 158, 11, 0.3)' }}>
+          <ShoppingBag size={12} /> {t.signalTakeProfit}
+        </span>
+      );
+    }
+    if (card.signal === 'near_peak') {
+      return (
+        <span className="stat-badge" style={{ background: 'rgba(6, 182, 212, 0.18)', color: 'var(--accent-cyan)', border: '1px solid rgba(6, 182, 212, 0.4)' }}>
+          <Sparkles size={12} /> {t.signalNearPeak}
+        </span>
+      );
+    }
+    if (card.signal === 'stop_loss') {
+      return (
+        <span className="stat-badge badge-loser">
+          <ShieldAlert size={12} /> {t.signalStopLoss}
+        </span>
+      );
+    }
+    return null;
+  };
+
   return (
     <div>
+      {/* Timeframe & Benchmark Control Bar */}
+      <div className="filter-bar glass-panel" style={{ marginBottom: '14px', background: 'rgba(18, 24, 36, 0.9)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)' }}>
+            {t.timeframeLabel}
+          </span>
+          <div className="filter-tabs">
+            <button 
+              className={`tab-btn ${timeframe === 'time_zero' ? 'active' : ''}`}
+              onClick={() => onChangeTimeframe && onChangeTimeframe('time_zero')}
+            >
+              {t.timeframeTimeZero}
+            </button>
+            <button 
+              className={`tab-btn ${timeframe === 'last_check' ? 'active' : ''}`}
+              onClick={() => onChangeTimeframe && onChangeTimeframe('last_check')}
+            >
+              {t.timeframeLastCheck}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Filter and Control Bar */}
       <div className="filter-bar glass-panel">
         <div className="filter-tabs">
@@ -49,13 +98,20 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
             className={`tab-btn tab-gainer ${filterMode === 'gainers' ? 'active' : ''}`}
             onClick={() => setFilterMode('gainers')}
           >
-            <TrendingUp size={15} /> {t.gainersTab} ({cards.filter(c => c.trend === 'up').length})
+            <TrendingUp size={15} /> {t.gainersTab} ({cards.filter(c => c.trend === 'up' || c.timeZeroDeltaTix > 0).length})
           </button>
           <button 
             className={`tab-btn tab-loser ${filterMode === 'losers' ? 'active' : ''}`}
             onClick={() => setFilterMode('losers')}
           >
-            <TrendingDown size={15} /> {t.losersTab} ({cards.filter(c => c.trend === 'down').length})
+            <TrendingDown size={15} /> {t.losersTab} ({cards.filter(c => c.trend === 'down' || c.timeZeroDeltaTix < 0).length})
+          </button>
+          <button 
+            className={`tab-btn ${filterMode === 'sell_signals' ? 'active' : ''}`}
+            style={{ background: filterMode === 'sell_signals' ? '#d97706' : undefined, color: filterMode === 'sell_signals' ? 'white' : '#fbbf24' }}
+            onClick={() => setFilterMode('sell_signals')}
+          >
+            <ShoppingBag size={15} /> {t.sellSignalsTab} ({cards.filter(c => c.signal === 'take_profit' || c.signal === 'near_peak').length})
           </button>
           <button 
             className={`tab-btn ${filterMode === 'valuable' ? 'active' : ''}`}
@@ -126,8 +182,8 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
       {viewStyle === 'grid' && (
         <div className="cards-grid">
           {sortedCards.map((card) => {
-            const isGainer = card.trend === 'up';
-            const isLoser = card.trend === 'down';
+            const isGainer = card.deltaTix > 0;
+            const isLoser = card.deltaTix < 0;
             let cardClass = 'card-item';
             if (isGainer) cardClass += ' gainer-card';
             if (isLoser) cardClass += ' loser-card';
@@ -170,10 +226,14 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
                       <span style={{ textTransform: 'uppercase', fontWeight: '700', color: 'var(--accent-cyan)' }}>{card.set}</span>
                       <span>•</span>
                       <span style={{ textTransform: 'capitalize' }}>{card.rarity}</span>
-                      <span>•</span>
-                      <span>CatID: {card.catId}</span>
                     </div>
                   </div>
+
+                  {renderSignalBadge(card) && (
+                    <div style={{ marginTop: '6px', marginBottom: '8px' }}>
+                      {renderSignalBadge(card)}
+                    </div>
+                  )}
 
                   <div className="card-price-row">
                     <div>
@@ -207,6 +267,7 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
                 <th style={{ padding: '14px 18px' }}>{t.thPriceTix}</th>
                 <th style={{ padding: '14px 18px' }}>{t.thTotalValue}</th>
                 <th style={{ padding: '14px 18px' }}>{t.thMovement}</th>
+                <th style={{ padding: '14px 18px' }}>{t.thSignal}</th>
               </tr>
             </thead>
             <tbody>
@@ -234,19 +295,22 @@ export function CardGridTable({ cards = [], onSelectCard, lang = 'en' }) {
                     {(card.priceTix * card.quantity).toFixed(2)} TIX
                   </td>
                   <td style={{ padding: '12px 18px' }}>
-                    {card.trend === 'up' && (
+                    {card.deltaTix > 0 && (
                       <span className="stat-badge badge-gainer">
                         <TrendingUp size={12} /> +{card.deltaPercent}% (+{card.deltaTix} TIX)
                       </span>
                     )}
-                    {card.trend === 'down' && (
+                    {card.deltaTix < 0 && (
                       <span className="stat-badge badge-loser">
                         <TrendingDown size={12} /> {card.deltaPercent}% ({card.deltaTix} TIX)
                       </span>
                     )}
-                    {card.trend === 'stable' && (
+                    {card.deltaTix === 0 && (
                       <span className="stat-badge badge-neutral">{t.badgeStable}</span>
                     )}
+                  </td>
+                  <td style={{ padding: '12px 18px' }}>
+                    {renderSignalBadge(card) || <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,6 @@
 # MTGO Collection Price Tracker & Trend Analyzer 🃏📈
 
-Un'applicazione web modernissima e full-stack ideata per tracciare automaticamente il valore in **Event Tickets (TIX)** della tua collezione di carte **Magic The Gathering Online (MTGO)**, monitorare lo storico dei prezzi ed evidenziare in tempo reale le carte in rialzo (**Gainers**) e in ribasso (**Losers**).
+A modern full-stack web application designed to automatically track the value in **Event Tickets (TIX)** of your **Magic The Gathering Online (MTGO)** card collection, monitor price history, calculate Profit & Loss (P&L) against Time 0 baseline, and highlight real-time **Trading Signals (Buy / Sell / Take Profit)**.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
@@ -10,76 +10,82 @@ Un'applicazione web modernissima e full-stack ideata per tracciare automaticamen
 
 ---
 
-## 🌟 Caratteristiche Principali
+## 🌟 Key Features
 
-- 📤 **Upload Drag-and-Drop `.dek`**: Carica o aggiorna direttamente nell'interfaccia web il file della tua collezione esportato da MTGO.
-- ⚡ **Fonti Prezzi MTGO Dedicate**: Collegato nativamente con le **Scryfall API** (prezzi TIX ufficiali e immagini ad alta risoluzione) e integrazione con **GoatBots** e **Cardhoarder**.
-- ⏱️ **Schedulazione Automatica**: Scheduler in background con intervalli programmabili (es. ogni 15 min, 30 min, 1 ora, 6 ore, 24 ore) o pulsante *"Aggiorna Ora"*.
-- 📈 **Highlights Gainers & Losers**: 
-  - **Badge Neon Green**: evidenziano istantaneamente le carte che stanno crescendo di valore ($\Delta\%$ e $\Delta \text{TIX}$).
-  - **Badge Crimson Red**: evidenziano le carte in calo di prezzo.
-- 📊 **Grafici Storici del Portafoglio**: Monitora l'andamento del valore totale della collezione nel tempo grazie ai grafici interattivi con Chart.js.
-- 🔍 **Filtri & Ricerca Avanzata**: Filtra al volo per Gainers, Losers, Carte di valore $\ge 1 \text{ TIX}$, o effettua ricerche per nome/set.
-- 💾 **Esportazione Report CSV**: Esporta con 1-click la tua collezione completa valutata con tutti i metadati ed il trend di mercato.
-- 🐳 **Docker & Docker Compose Ready**: Pronto per essere distribuito ed avviato in 1 secondo su qualsiasi sistema operativo.
-
----
-
-## 💡 Come esportare la tua Collezione da MTGO
-
-1. Apri il client ufficiale di **Magic The Gathering Online (MTGO)**.
-2. Vai nella scheda **Collection**.
-3. Fai clic con il tasto destro all'interno dell'elenco delle tue carte e seleziona **Select All**.
-4. Fai clic sul pulsante **Export** in basso e salva il file selezionando la voce **DEK File (.dek)**.
-5. Carica il file `.dek` nell'applicazione tramite l'interfaccia web!
+- 📤 **Drag-and-Drop `.dek` Upload**: Upload or update your MTGO collection file directly in the web UI.
+- ⚡ **Dedicated MTGO Price Sources**: Native integration with **Scryfall API** (official MTGO TIX prices and high-res artwork) and price estimation for **GoatBots Market** and **Cardhoarder**.
+- ⏱️ **Automatic Schedulable Price Check**: Background scheduler with customizable intervals (e.g. every 15m, 30m, 1h, 6h, 24h) or manual *"Sync Now"*.
+- 🚀 **Time 0 Baseline & P&L Tracking**: Tracks portfolio growth and individual card performance relative to the **Time 0 initial import**.
+- 💰 **Trading Decision Signals**:
+  - **`💰 SELL (Take Profit)`**: Highlights cards with significant price gains ($\ge +35\%$ or $+0.75\text{ TIX}$) recommending when to sell on bot vendors.
+  - **`⚠️ NEAR ALL-TIME HIGH`**: Highlights cards trading within 5% of their peak recorded price.
+  - **`📉 HIGH LOSS ALERT`**: Warns when a card has dropped significantly from Time 0.
+- 📊 **Interactive Portfolio History Chart**: Monitor total portfolio value over time with **click-to-delete snapshot management** to remove unwanted data points directly from the chart.
+- 🔗 **3-Tier Card Resolution Engine**:
+  - *Tier 1*: MTGO Catalog ID (`CatID`) batch lookup.
+  - *Tier 2*: Automatic card name fallback for MTGO digital variants & promos (including Double-Faced Cards / DFC).
+  - *Tier 3*: Manual Scryfall URL link override to attach any specific printing URL directly from the card detail modal.
+- 🌐 **Multi-Language Support**: **English (Default)** and **Italian**, toggleable with 1-click in the UI and persisted in settings.
+- 💾 **1-Click CSV Export**: Export your complete valued collection report with all metadata, P&L, and trading signals.
+- 🐳 **Docker & Docker Compose Ready**: Plug-and-play deployment on any operating system.
 
 ---
 
-## 🚀 Guida all'Installazione & Avvio
+## 💡 How to Export Your Collection from MTGO
 
-### Opzione A: Avvio con Node.js (Locale)
+1. Open the official **Magic The Gathering Online (MTGO)** client.
+2. Go to the **Collection** tab.
+3. Right-click inside your cards list on the bottom left and click **Select All**.
+4. Click **Export** on the bottom right and save as **DEK File (.dek)**.
+5. Drag and drop the `.dek` file into MTGO Card Tracker!
 
-1. **Clona il repository**:
+---
+
+## 🚀 Quick Start Guide
+
+### Option A: Running with Node.js (Local)
+
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/your-username/mtgo-collection-tracker.git
    cd mtgo-collection-tracker
    ```
 
-2. **Installa le dipendenze**:
+2. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Compila il frontend e avvia il server**:
+3. **Build frontend and start server**:
    ```bash
    npm run build
    npm start
    ```
 
-4. Apri il tuo browser su [http://localhost:3001](http://localhost:3001).
+4. Open your browser at [http://localhost:3001](http://localhost:3001).
 
 ---
 
-### Opzione B: Avvio con Docker (Raccomandato)
+### Option B: Running with Docker (Recommended)
 
-Non richiede l'installazione locale di Node.js. È sufficiente avere Docker e Docker Compose installati:
+No local Node.js installation required. Run:
 
 ```bash
 docker-compose up -d
 ```
 
-L'applicazione sarà disponibile su [http://localhost:3001](http://localhost:3001).
+Access the app at [http://localhost:3001](http://localhost:3001).
 
 ---
 
-## 🛠️ Tecnologie Utilizzate
+## 🛠️ Built With
 
 - **Backend**: Node.js, Express, Axios, `xml2js`, `node-cron`.
-- **Frontend**: React 18, Vite 6, Chart.js, Lucide Icons, Vanilla CSS (Design System personalizzato MTGO Dark & Glassmorphism).
-- **APIs & Data**: Scryfall API (MTGO `mtgo_id` collection endpoints), GoatBots, Cardhoarder.
+- **Frontend**: React 18, Vite 6, Chart.js, Lucide Icons, Vanilla CSS (MTGO Dark & Glassmorphism Design System).
+- **APIs & Data**: Scryfall API (`mtgo_id` collection & named search endpoints), GoatBots, Cardhoarder.
 
 ---
 
-## 📄 Licenza
+## 📄 License
 
-Rilasciato sotto licenza MIT.
+Released under the MIT License.

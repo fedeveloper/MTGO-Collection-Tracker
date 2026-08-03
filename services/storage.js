@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   autoSyncEnabled: true,
   priceSource: 'scryfall',
   language: 'en',
+  timeframe: 'time_zero', // 'time_zero' (default) | 'last_check'
   lastSyncTime: null,
   nextSyncTime: null
 };
@@ -36,9 +37,6 @@ export function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
 }
 
-/**
- * Get custom Scryfall links overrides map (catId -> scryfallUrl)
- */
 export function getCustomLinks() {
   if (!fs.existsSync(CUSTOM_LINKS_FILE)) {
     return {};
@@ -51,11 +49,6 @@ export function getCustomLinks() {
   }
 }
 
-/**
- * Save custom Scryfall link for a CatID
- * @param {number|string} catId 
- * @param {string} scryfallUrl 
- */
 export function setCustomLink(catId, scryfallUrl) {
   const links = getCustomLinks();
   if (scryfallUrl && scryfallUrl.trim().length > 0) {
@@ -67,9 +60,6 @@ export function setCustomLink(catId, scryfallUrl) {
   return links;
 }
 
-/**
- * Read history snapshots
- */
 export function getHistory(priceSource) {
   if (!fs.existsSync(HISTORY_FILE)) {
     return [];
@@ -87,9 +77,6 @@ export function getHistory(priceSource) {
   }
 }
 
-/**
- * Save a new price snapshot into history
- */
 export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
   const allHistory = getHistory();
   const timestamp = new Date().toISOString();
@@ -119,9 +106,6 @@ export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
   return newSnapshot;
 }
 
-/**
- * Delete a snapshot by timestamp
- */
 export function deleteSnapshot(timestamp) {
   const allHistory = getHistory();
   const filtered = allHistory.filter((s) => s.timestamp !== timestamp);
@@ -130,47 +114,116 @@ export function deleteSnapshot(timestamp) {
 }
 
 /**
- * Calculate price movements comparing current prices to previous snapshots of THE SAME price source
+ * Calculate price movements and trading signals comparing current prices to baseline or last check
+ * @param {Array<object>} cards Current cards list with prices
+ * @param {string} priceSource Current price source
+ * @param {string} timeframe - 'time_zero' (Time 0 / Initial snapshot) | 'last_check' (Previous snapshot)
+ * @returns {{ cards: Array<object>, summary: object }} Cards enriched with movements & decision signals + summary
  */
-export function calculateMovements(cards, priceSource = 'scryfall') {
+export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 'time_zero') {
   const sourceHistory = getHistory(priceSource);
 
-  if (sourceHistory.length <= 1) {
-    return cards.map((card) => ({
-      ...card,
-      previousPriceTix: card.priceTix,
-      deltaTix: 0,
-      deltaPercent: 0,
-      trend: 'stable'
-    }));
+  // Determine reference snapshot based on timeframe
+  let referenceSnapshot = null;
+  let timeZeroSnapshot = sourceHistory.length > 0 ? sourceHistory[0] : null;
+
+  if (sourceHistory.length > 0) {
+    if (timeframe === 'time_zero') {
+      referenceSnapshot = timeZeroSnapshot;
+    } else if (timeframe === 'last_check') {
+      referenceSnapshot = sourceHistory.length > 1 ? sourceHistory[sourceHistory.length - 2] : sourceHistory[0];
+    }
   }
 
-  const prevSnapshot = sourceHistory[sourceHistory.length - 2];
-  const prevPrices = prevSnapshot.cardPrices || {};
+  const refPrices = referenceSnapshot?.cardPrices || {};
+  const timeZeroPrices = timeZeroSnapshot?.cardPrices || {};
 
-  return cards.map((card) => {
+  // Build map of peak (All-Time High) prices for each card across history
+  const peakPrices = {};
+  sourceHistory.forEach((snap) => {
+    if (snap.cardPrices) {
+      Object.entries(snap.cardPrices).forEach(([catId, price]) => {
+        if (peakPrices[catId] === undefined || price > peakPrices[catId]) {
+          peakPrices[catId] = price;
+        }
+      });
+    }
+  });
+
+  let initialPortfolioValue = 0;
+  let currentPortfolioValue = 0;
+
+  const enrichedCards = cards.map((card) => {
     const currPrice = card.priceTix || 0;
-    const prevPrice = prevPrices[card.catId] !== undefined ? prevPrices[card.catId] : currPrice;
+    const refPrice = refPrices[card.catId] !== undefined ? refPrices[card.catId] : currPrice;
+    const timeZeroPrice = timeZeroPrices[card.catId] !== undefined ? timeZeroPrices[card.catId] : currPrice;
+    const peakPrice = peakPrices[card.catId] !== undefined ? peakPrices[card.catId] : currPrice;
 
-    const deltaTix = Math.round((currPrice - prevPrice) * 100) / 100;
-    
+    initialPortfolioValue += timeZeroPrice * (card.quantity || 1);
+    currentPortfolioValue += currPrice * (card.quantity || 1);
+
+    const deltaTix = Math.round((currPrice - refPrice) * 100) / 100;
     let deltaPercent = 0;
-    if (prevPrice > 0) {
-      deltaPercent = Math.round(((currPrice - prevPrice) / prevPrice) * 1000) / 10;
+    if (refPrice > 0) {
+      deltaPercent = Math.round(((currPrice - refPrice) / refPrice) * 1000) / 10;
     } else if (currPrice > 0) {
       deltaPercent = 100;
+    }
+
+    const timeZeroDeltaTix = Math.round((currPrice - timeZeroPrice) * 100) / 100;
+    let timeZeroDeltaPercent = 0;
+    if (timeZeroPrice > 0) {
+      timeZeroDeltaPercent = Math.round(((currPrice - timeZeroPrice) / timeZeroPrice) * 1000) / 10;
+    } else if (currPrice > 0) {
+      timeZeroDeltaPercent = 100;
     }
 
     let trend = 'stable';
     if (deltaTix > 0.001) trend = 'up';
     else if (deltaTix < -0.001) trend = 'down';
 
+    // --- Trading Decision Signals ---
+    // 1. Take Profit (Vendi): Gain from Time 0 is >= 35% or >= +0.75 TIX net
+    // 2. Near Peak (Prezzo Massimo): Within 5% of all-time high
+    // 3. Stop Loss / Loss: Loss from Time 0 is <= -30%
+    let signal = 'neutral';
+    if (timeZeroDeltaPercent >= 35 || (timeZeroDeltaTix >= 0.75 && timeZeroDeltaPercent >= 20)) {
+      signal = 'take_profit';
+    } else if (currPrice > 0 && peakPrice > 0 && currPrice >= peakPrice * 0.95 && timeZeroDeltaPercent > 10) {
+      signal = 'near_peak';
+    } else if (timeZeroDeltaPercent <= -30) {
+      signal = 'stop_loss';
+    }
+
     return {
       ...card,
-      previousPriceTix: prevPrice,
+      previousPriceTix: refPrice,
+      timeZeroPrice,
+      peakPrice,
       deltaTix,
       deltaPercent,
-      trend
+      timeZeroDeltaTix,
+      timeZeroDeltaPercent,
+      trend,
+      signal
     };
   });
+
+  const netProfitTix = Math.round((currentPortfolioValue - initialPortfolioValue) * 100) / 100;
+  let netProfitPercent = 0;
+  if (initialPortfolioValue > 0) {
+    netProfitPercent = Math.round(((currentPortfolioValue - initialPortfolioValue) / initialPortfolioValue) * 1000) / 10;
+  }
+
+  const summary = {
+    timeframe,
+    initialPortfolioValue: Math.round(initialPortfolioValue * 100) / 100,
+    currentPortfolioValue: Math.round(currentPortfolioValue * 100) / 100,
+    netProfitTix,
+    netProfitPercent,
+    timeZeroTimestamp: timeZeroSnapshot?.timestamp || null,
+    totalSnapshots: sourceHistory.length
+  };
+
+  return { cards: enrichedCards, summary };
 }

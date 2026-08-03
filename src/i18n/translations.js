@@ -11,8 +11,10 @@ export const translations = {
     syncNow: "Sync Now",
     updating: "Updating...",
     
-    // Stats
+    // Stats & Trading Signals
     totalValue: "Total Collection Value",
+    initialValue: "Initial Value (Time 0)",
+    netProfit: "Net Profit / Loss (P&L)",
     uniqueCards: "Unique Cards",
     totalCards: "total",
     gainersCount: "Price Gainers",
@@ -21,6 +23,15 @@ export const translations = {
     worstLoser: "Worst",
     noGainers: "No price increases",
     noLosers: "No price drops",
+    sellSignalsSub: "Cards ready for profit taking",
+    signalTakeProfit: "💰 SELL (Take Profit)",
+    signalNearPeak: "⚠️ NEAR ALL-TIME HIGH",
+    signalStopLoss: "📉 HIGH LOSS ALERT",
+
+    // Banner Banners in Card Detail
+    bannerTakeProfit: "💰 EXCELLENT SELLING CONDITION (Take Profit)",
+    bannerNearPeak: "⚠️ PRICE NEAR ALL-TIME HIGH (Peak)",
+    bannerStopLoss: "📉 HIGH LOSS FROM TIME 0",
 
     // Portfolio Chart
     chartTitle: "Collection Value Over Time",
@@ -29,11 +40,16 @@ export const translations = {
     clickPointHint: "💡 Click any data point on the chart to delete that snapshot",
     deleteSnapshotTitle: "Delete Snapshot",
     deleteSnapshotConfirm: "Are you sure you want to delete this snapshot?",
+    deleteSnapshotButton: "Delete Snapshot",
 
-    // Filters & Sorting
+    // Filters & Timeframes
+    timeframeLabel: "Benchmark:",
+    timeframeTimeZero: "🚀 Time 0 (Initial Import)",
+    timeframeLastCheck: "⏱️ Last Check",
     allCards: "All Cards",
     gainersTab: "Gainers",
     losersTab: "Losers",
+    sellSignalsTab: "💰 Sell Signals",
     valuableTab: "Value ≥ 1 TIX",
     searchPlaceholder: "Search card or set...",
     sortPriceDesc: "Price: High to Low",
@@ -53,11 +69,14 @@ export const translations = {
     thPriceTix: "Unit Price (TIX)",
     thTotalValue: "Total Value",
     thMovement: "Price Movement",
+    thSignal: "Trading Signal",
     badgeStable: "Stable",
 
     // Card Detail Modal
     currentPrice: "Current Price (TIX)",
-    lastCheckChange: "Change Since Last Check",
+    timeZeroPriceLabel: "Time 0 Baseline Price",
+    peakPriceLabel: "Peak Recorded Price (ATH)",
+    lastCheckChange: "Change vs Benchmark",
     quantityOwned: "Quantity Owned",
     collectionValue: "Collection Value",
     customLinkTitle: "Custom Scryfall Link",
@@ -119,8 +138,10 @@ export const translations = {
     syncNow: "Aggiorna Ora",
     updating: "Aggiornamento...",
     
-    // Stats
-    totalValue: "Valore Totale Collezione",
+    // Stats & Trading Signals
+    totalValue: "Valore Attuale Collezione",
+    initialValue: "Valore Iniziale (Tempo 0)",
+    netProfit: "Plusvalenza / Minusvalenza",
     uniqueCards: "Carte Uniche",
     totalCards: "totali",
     gainersCount: "Carte in Salita (Gainers)",
@@ -129,6 +150,15 @@ export const translations = {
     worstLoser: "Worst",
     noGainers: "Nessuna variazione in aumento",
     noLosers: "Nessuna variazione in calo",
+    sellSignalsSub: "Carte mature per la vendita",
+    signalTakeProfit: "💰 VENDI (Take Profit)",
+    signalNearPeak: "⚠️ VICINO AL MASSIMO (Peak)",
+    signalStopLoss: "📉 SVALUTAZIONE ALTA",
+
+    // Banner Banners in Card Detail
+    bannerTakeProfit: "💰 CONDIZIONE PERFETTA PER VENDERE (Take Profit)",
+    bannerNearPeak: "⚠️ PREZZO VICINO AL MASSIMO STORICO (Peak)",
+    bannerStopLoss: "📉 SVALUTAZIONE ALTA DAL TEMPO 0",
 
     // Portfolio Chart
     chartTitle: "Andamento Valore Collezione nel Tempo",
@@ -137,11 +167,16 @@ export const translations = {
     clickPointHint: "💡 Clicca su un punto del grafico per eliminare quello snapshot",
     deleteSnapshotTitle: "Elimina Snapshot",
     deleteSnapshotConfirm: "Sei sicuro di voler eliminare questo snapshot?",
+    deleteSnapshotButton: "Elimina Snapshot",
 
-    // Filters & Sorting
+    // Filters & Timeframes
+    timeframeLabel: "Benchmark:",
+    timeframeTimeZero: "🚀 Tempo 0 (Iniziale)",
+    timeframeLastCheck: "⏱️ Ultimo Controllo",
     allCards: "Tutte le carte",
     gainersTab: "In Salita",
     losersTab: "In Discesa",
+    sellSignalsTab: "💰 Segnali di Vendita",
     valuableTab: "Valore ≥ 1 TIX",
     searchPlaceholder: "Cerca carta o set...",
     sortPriceDesc: "Prezzo: Più Alto",
@@ -161,11 +196,14 @@ export const translations = {
     thPriceTix: "Prezzo TIX",
     thTotalValue: "Valore Totale",
     thMovement: "Variazione",
+    thSignal: "Segnale Trading",
     badgeStable: "Stabile",
 
     // Card Detail Modal
     currentPrice: "Prezzo Attuale (TIX)",
-    lastCheckChange: "Variazione Ultimo Controllo",
+    timeZeroPriceLabel: "Prezzo al Tempo 0 (Iniziale)",
+    peakPriceLabel: "Prezzo Massimo Registrato (Peak)",
+    lastCheckChange: "Variazione dal Benchmark",
     quantityOwned: "Quantità Posseduta",
     collectionValue: "Valore Collezione",
     customLinkTitle: "Link Scryfall Personalizzato",
