@@ -28,6 +28,12 @@ A modern full-stack web application designed to automatically track the value in
 - 🌐 **Multi-Language Support**: **English (Default)** and **Italian**, toggleable with 1-click in the UI and persisted in settings.
 - 💾 **1-Click CSV Export**: Export your complete valued collection report with all metadata, P&L, and trading signals.
 - 🐳 **Docker & Docker Compose Ready**: Plug-and-play deployment on any operating system.
+  
+<img width="1900" height="903" alt="image" src="https://github.com/user-attachments/assets/dd12c673-d773-4f40-9a88-0b5a6858134a" />
+
+<img width="1903" height="905" alt="image" src="https://github.com/user-attachments/assets/b7e2f41b-5482-4f3e-8599-2d88a7ac6307" />
+
+<img width="1903" height="906" alt="image" src="https://github.com/user-attachments/assets/45cacd6b-afe8-41b7-91a6-a2101734ff1a" />
 
 ---
 
