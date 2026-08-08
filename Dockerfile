@@ -18,7 +18,7 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/services ./services
-COPY --from=builder /app/Collection.dek ./Collection.dek
+COPY --from=builder /app/Collection.de[k] ./
 
 EXPOSE 3001
 CMD ["node", "server.js"]
