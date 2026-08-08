@@ -1,7 +1,7 @@
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import zlib from 'zlib';
 import { getCustomLinks } from './storage.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -11,6 +11,42 @@ const GOATBOTS_META_JSON = path.join(DATA_DIR, 'goatbots_meta.json');
 
 // Local cache for card metadata (images, sets, mana costs, prices) to prevent redundant lookups
 const cardMetadataCache = new Map();
+
+/**
+ * Pure Node.js zero-dependency ZIP archive extractor using zlib
+ * @param {Buffer} zipBuffer 
+ * @returns {{ fileName: string, content: string }}
+ */
+function unzipBuffer(zipBuffer) {
+  let offset = 0;
+  while (offset < zipBuffer.length - 30) {
+    // Check for Local File Header signature 0x04034b50 ("PK\x03\x04")
+    if (zipBuffer.readUInt32LE(offset) === 0x04034b50) {
+      const compMethod = zipBuffer.readUInt16LE(offset + 8);
+      const compSize = zipBuffer.readUInt32LE(offset + 18);
+      const fnLen = zipBuffer.readUInt16LE(offset + 26);
+      const extraLen = zipBuffer.readUInt16LE(offset + 28);
+
+      const fileName = zipBuffer.toString('utf-8', offset + 30, offset + 30 + fnLen);
+      const dataStart = offset + 30 + fnLen + extraLen;
+      const dataEnd = dataStart + compSize;
+      const compData = zipBuffer.subarray(dataStart, dataEnd);
+
+      let decompressed;
+      if (compMethod === 8) { // Deflate
+        decompressed = zlib.inflateRawSync(compData);
+      } else if (compMethod === 0) { // Stored
+        decompressed = compData;
+      } else {
+        throw new Error(`Unsupported ZIP compression method: ${compMethod}`);
+      }
+
+      return { fileName, content: decompressed.toString('utf-8') };
+    }
+    offset++;
+  }
+  throw new Error('No valid ZIP local file header found');
+}
 
 /**
  * Delay execution for ms milliseconds
@@ -72,30 +108,19 @@ export async function fetchGoatbotsPrices() {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
-    fs.writeFileSync(GOATBOTS_ZIP, Buffer.from(response.data));
-    execSync(`tar -xf "${GOATBOTS_ZIP}" -C "${DATA_DIR}"`);
+    const zipBuffer = Buffer.from(response.data);
+    const unzipped = unzipBuffer(zipBuffer);
+    const priceMap = JSON.parse(unzipped.content);
 
-    const files = fs.readdirSync(DATA_DIR);
-    const priceFile = files.find((f) => f.startsWith('price-history-') && f.endsWith('.txt'));
+    fs.writeFileSync(GOATBOTS_CACHE_JSON, JSON.stringify(priceMap), 'utf-8');
+    fs.writeFileSync(GOATBOTS_META_JSON, JSON.stringify({
+      lastModified: serverLastModified,
+      etag: serverEtag,
+      updatedAt: new Date().toISOString()
+    }, null, 2), 'utf-8');
 
-    if (priceFile) {
-      const fullPath = path.join(DATA_DIR, priceFile);
-      const rawText = fs.readFileSync(fullPath, 'utf-8');
-      const priceMap = JSON.parse(rawText);
-
-      fs.writeFileSync(GOATBOTS_CACHE_JSON, JSON.stringify(priceMap), 'utf-8');
-      fs.writeFileSync(GOATBOTS_META_JSON, JSON.stringify({
-        lastModified: serverLastModified,
-        etag: serverEtag,
-        updatedAt: new Date().toISOString()
-      }, null, 2), 'utf-8');
-
-      if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-      if (fs.existsSync(GOATBOTS_ZIP)) fs.unlinkSync(GOATBOTS_ZIP);
-
-      console.log(`[GoatBots] Successfully updated GoatBots price map (${Object.keys(priceMap).length} cards).`);
-      return priceMap;
-    }
+    console.log(`[GoatBots] Successfully updated GoatBots price map from ${unzipped.fileName} (${Object.keys(priceMap).length} cards).`);
+    return priceMap;
   } catch (err) {
     console.error('[GoatBots Check/Download Error]', err.message);
   }
