@@ -31,9 +31,9 @@ A modern full-stack web application designed to automatically track the value in
   
 <img width="1902" height="906" alt="image" src="https://github.com/user-attachments/assets/5851f1de-e6ac-4bb1-b751-5b3233c829fd" />
 
-<img width="1903" height="905" alt="image" src="https://github.com/user-attachments/assets/b7e2f41b-5482-4f3e-8599-2d88a7ac6307" />
+<img width="1902" height="908" alt="image" src="https://github.com/user-attachments/assets/18b9da58-edfd-4d81-8db4-a659c57a8b73" />
 
-<img width="1903" height="906" alt="image" src="https://github.com/user-attachments/assets/45cacd6b-afe8-41b7-91a6-a2101734ff1a" />
+<img width="1903" height="911" alt="image" src="https://github.com/user-attachments/assets/039f75f2-cdb4-46ff-a267-895faa4a5215" />
 
 ---
 
