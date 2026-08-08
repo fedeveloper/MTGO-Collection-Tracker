@@ -10,6 +10,17 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+/**
+ * Safely write JSON data to file using atomic tmp-file rename to prevent corrupted 0-byte files
+ * @param {string} filePath 
+ * @param {object} data 
+ */
+function writeJsonAtomic(filePath, data) {
+  const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+  fs.renameSync(tmpPath, filePath);
+}
+
 const DEFAULT_SETTINGS = {
   scheduleIntervalMinutes: 60,
   autoSyncEnabled: true,
@@ -34,7 +45,7 @@ export function getSettings() {
 }
 
 export function saveSettings(settings) {
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
+  writeJsonAtomic(SETTINGS_FILE, settings);
 }
 
 export function getCustomLinks() {
@@ -56,7 +67,7 @@ export function setCustomLink(catId, scryfallUrl) {
   } else {
     delete links[String(catId)];
   }
-  fs.writeFileSync(CUSTOM_LINKS_FILE, JSON.stringify(links, null, 2), 'utf-8');
+  writeJsonAtomic(CUSTOM_LINKS_FILE, links);
   return links;
 }
 
@@ -75,6 +86,11 @@ export function getHistory(priceSource) {
   } catch {
     return [];
   }
+}
+
+export function clearHistory() {
+  writeJsonAtomic(HISTORY_FILE, []);
+  return [];
 }
 
 export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
@@ -102,14 +118,14 @@ export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
   const maxHistory = 500;
   const trimmedHistory = allHistory.slice(-maxHistory);
 
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(trimmedHistory, null, 2), 'utf-8');
+  writeJsonAtomic(HISTORY_FILE, trimmedHistory);
   return newSnapshot;
 }
 
 export function deleteSnapshot(timestamp) {
   const allHistory = getHistory();
   const filtered = allHistory.filter((s) => s.timestamp !== timestamp);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(filtered, null, 2), 'utf-8');
+  writeJsonAtomic(HISTORY_FILE, filtered);
   return filtered;
 }
 

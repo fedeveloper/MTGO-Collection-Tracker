@@ -12,8 +12,10 @@ A modern full-stack web application designed to automatically track the value in
 
 ## 🌟 Key Features
 
-- 📤 **Drag-and-Drop `.dek` Upload**: Upload or update your MTGO collection file directly in the web UI.
-- ⚡ **Dedicated MTGO Price Sources**: Native integration with **Scryfall API** (official MTGO TIX prices and high-res artwork) and price estimation for **GoatBots Market** and **Cardhoarder**.
+- 📤 **Drag-and-Drop `.dek` Upload**: Upload or update your MTGO collection file directly in the web UI with automatic Time 0 baseline reset.
+- ⚡ **Native GoatBots Daily Price Integration**: Direct integration with **GoatBots Market** by fetching and unzipping their official daily price archive (`price-history.zip`) updated every day at 5:30 AM CET, backed by smart HTTP `HEAD` revalidation (`Last-Modified`) to avoid redundant downloads.
+- 🎯 **Global `VALUE ≥ 1 TIX` Toggle Filter**: Exclude low-value/penny cards across all views, gainers/losers lists, and KPI summary counters with a single click.
+- ⚡ **Scryfall & Vendor Multi-Source Pricing**: Native support for **Scryfall API** (official MTGO TIX prices and high-res artwork) and **GoatBots Market**.
 - ⏱️ **Automatic Schedulable Price Check**: Background scheduler with customizable intervals (e.g. every 15m, 30m, 1h, 6h, 24h) or manual *"Sync Now"*.
 - 🚀 **Time 0 Baseline & P&L Tracking**: Tracks portfolio growth and individual card performance relative to the **Time 0 initial import**.
 - 💰 **Trading Decision Signals**:
@@ -22,11 +24,14 @@ A modern full-stack web application designed to automatically track the value in
   - **`📉 HIGH LOSS ALERT`**: Warns when a card has dropped significantly from Time 0.
 - 📊 **Interactive Portfolio History Chart**: Monitor total portfolio value over time with **click-to-delete snapshot management** to remove unwanted data points directly from the chart.
 - 🔗 **3-Tier Card Resolution Engine**:
+  - *Tier 0*: Custom Scryfall URL overrides with rate-limiting protection.
   - *Tier 1*: MTGO Catalog ID (`CatID`) batch lookup.
   - *Tier 2*: Automatic card name fallback for MTGO digital variants & promos (including Double-Faced Cards / DFC).
-  - *Tier 3*: Manual Scryfall URL link override to attach any specific printing URL directly from the card detail modal.
+  - *Tier 3*: Default stub for unmapped entries.
+- 🧩 **Resilient `.dek` XML Parser**: Order-independent XML tag attribute parser with XML entity unescaping (`&amp;`, `&lt;`, `&gt;`).
+- 🔒 **Atomic Data Storage**: Safe JSON filesystem persistence (`writeJsonAtomic`) via temporary file swap to prevent data corruption during unexpected shutdowns.
 - 🌐 **Multi-Language Support**: **English (Default)** and **Italian**, toggleable with 1-click in the UI and persisted in settings.
-- 💾 **1-Click CSV Export**: Export your complete valued collection report with all metadata, P&L, and trading signals.
+- 💾 **1-Click CSV Export**: Export your complete valued collection report with language-aware column headers, metadata, P&L, and trading signals.
 - 🐳 **Docker & Docker Compose Ready**: Plug-and-play deployment on any operating system.
   
 <img width="1902" height="906" alt="image" src="https://github.com/user-attachments/assets/5851f1de-e6ac-4bb1-b751-5b3233c829fd" />
@@ -86,9 +91,9 @@ Access the app at [http://localhost:3001](http://localhost:3001).
 
 ## 🛠️ Built With
 
-- **Backend**: Node.js, Express, Axios, `xml2js`, `node-cron`.
+- **Backend**: Node.js, Express, Axios.
 - **Frontend**: React 18, Vite 6, Chart.js, Lucide Icons, Vanilla CSS (MTGO Dark & Glassmorphism Design System).
-- **APIs & Data**: Scryfall API (`mtgo_id` collection & named search endpoints), GoatBots, Cardhoarder.
+- **APIs & Data**: Scryfall API (`mtgo_id` collection & named search endpoints), GoatBots Daily Price Archives (`price-history.zip`).
 
 ---
 

@@ -1,5 +1,13 @@
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
 import { getCustomLinks } from './storage.js';
+
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const GOATBOTS_ZIP = path.join(DATA_DIR, 'price-history.zip');
+const GOATBOTS_CACHE_JSON = path.join(DATA_DIR, 'goatbots_prices_cache.json');
+const GOATBOTS_META_JSON = path.join(DATA_DIR, 'goatbots_meta.json');
 
 // Local cache for card metadata (images, sets, mana costs, prices) to prevent redundant lookups
 const cardMetadataCache = new Map();
@@ -13,6 +21,96 @@ const SCRYFALL_HEADERS = {
   'Content-Type': 'application/json',
   'User-Agent': 'MTGOCollectionTracker/1.0 (https://github.com/mtgo-tracker)'
 };
+
+/**
+ * Fetch and extract daily GoatBots price file (updated daily at 5:30 AM CET)
+ * Checks HTTP HEAD response (Last-Modified / ETag) to prevent re-downloading identical files.
+ * @returns {Promise<Record<string, number>>} Map of CatID -> GoatBots TIX price
+ */
+export async function fetchGoatbotsPrices() {
+  let cachedMeta = {};
+  if (fs.existsSync(GOATBOTS_META_JSON)) {
+    try {
+      cachedMeta = JSON.parse(fs.readFileSync(GOATBOTS_META_JSON, 'utf-8'));
+    } catch {
+      cachedMeta = {};
+    }
+  }
+
+  const hasCache = fs.existsSync(GOATBOTS_CACHE_JSON);
+
+  try {
+    // Check HTTP HEAD headers first to see if a newer version is available
+    const headRes = await axios.head('https://www.goatbots.com/download/prices/price-history.zip', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      timeout: 8000
+    });
+
+    const serverLastModified = headRes.headers['last-modified'];
+    const serverEtag = headRes.headers['etag'];
+
+    if (hasCache && cachedMeta.lastModified && serverLastModified === cachedMeta.lastModified) {
+      console.log(`[GoatBots] Daily price archive has not changed (${serverLastModified}). Reusing local cache.`);
+      return JSON.parse(fs.readFileSync(GOATBOTS_CACHE_JSON, 'utf-8'));
+    }
+
+    console.log(`[GoatBots] New daily price file detected (Last-Modified: ${serverLastModified || 'New'}). Downloading price-history.zip...`);
+
+    const response = await axios.get('https://www.goatbots.com/download/prices/price-history.zip', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      responseType: 'arraybuffer',
+      timeout: 15000
+    });
+
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    fs.writeFileSync(GOATBOTS_ZIP, Buffer.from(response.data));
+    execSync(`tar -xf "${GOATBOTS_ZIP}" -C "${DATA_DIR}"`);
+
+    const files = fs.readdirSync(DATA_DIR);
+    const priceFile = files.find((f) => f.startsWith('price-history-') && f.endsWith('.txt'));
+
+    if (priceFile) {
+      const fullPath = path.join(DATA_DIR, priceFile);
+      const rawText = fs.readFileSync(fullPath, 'utf-8');
+      const priceMap = JSON.parse(rawText);
+
+      fs.writeFileSync(GOATBOTS_CACHE_JSON, JSON.stringify(priceMap), 'utf-8');
+      fs.writeFileSync(GOATBOTS_META_JSON, JSON.stringify({
+        lastModified: serverLastModified,
+        etag: serverEtag,
+        updatedAt: new Date().toISOString()
+      }, null, 2), 'utf-8');
+
+      if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      if (fs.existsSync(GOATBOTS_ZIP)) fs.unlinkSync(GOATBOTS_ZIP);
+
+      console.log(`[GoatBots] Successfully updated GoatBots price map (${Object.keys(priceMap).length} cards).`);
+      return priceMap;
+    }
+  } catch (err) {
+    console.error('[GoatBots Check/Download Error]', err.message);
+  }
+
+  if (hasCache) {
+    try {
+      console.log('[GoatBots] Reusing existing local GoatBots price cache.');
+      return JSON.parse(fs.readFileSync(GOATBOTS_CACHE_JSON, 'utf-8'));
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
 
 /**
  * Parse a Scryfall card URL (e.g. https://scryfall.com/card/inr/120/invasion-of-innistrad-deluge-of-the-dead)
@@ -29,17 +127,19 @@ export function parseScryfallUrl(url) {
 }
 
 /**
- * Helper to build card object from Scryfall API response
+ * Helper to build card object from Scryfall API response and apply target price source
  */
-function buildCardInfo(scryfallCard, catId, priceSource) {
+function buildCardInfo(scryfallCard, catId, priceSource, goatbotsPricesMap = {}) {
   const baseTix = parseFloat(scryfallCard.prices?.tix || scryfallCard.prices?.tix_foil || '0');
   const validBaseTix = isNaN(baseTix) ? 0 : baseTix;
 
   let calculatedPriceTix = validBaseTix;
   if (priceSource === 'goatbots') {
-    if (validBaseTix > 0) {
-      const rarityMultiplier = scryfallCard.rarity === 'mythic' ? 0.97 : scryfallCard.rarity === 'rare' ? 0.95 : 0.90;
-      calculatedPriceTix = Math.round(validBaseTix * rarityMultiplier * 100) / 100;
+    const gbPrice = goatbotsPricesMap[String(catId)];
+    if (gbPrice !== undefined && !isNaN(parseFloat(gbPrice))) {
+      calculatedPriceTix = parseFloat(gbPrice);
+    } else if (validBaseTix > 0) {
+      calculatedPriceTix = validBaseTix;
     }
   } else if (priceSource === 'cardhoarder') {
     if (validBaseTix > 0) {
@@ -84,6 +184,11 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
   const customLinksMap = getCustomLinks();
   const unmappedCards = [];
 
+  let goatbotsPricesMap = {};
+  if (priceSource === 'goatbots') {
+    goatbotsPricesMap = await fetchGoatbotsPrices();
+  }
+
   // --- TIER 0: Resolve Custom User Scryfall URLs ---
   for (const card of cards) {
     const customUrl = customLinksMap[String(card.catId)];
@@ -94,7 +199,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
           const apiUrl = `https://api.scryfall.com/cards/${parsedUrl.setCode}/${parsedUrl.collectorNum}`;
           const response = await axios.get(apiUrl, { headers: SCRYFALL_HEADERS });
           if (response.data) {
-            const cardInfo = buildCardInfo(response.data, card.catId, priceSource);
+            const cardInfo = buildCardInfo(response.data, card.catId, priceSource, goatbotsPricesMap);
             cardInfo.isCustomLinked = true;
             cardInfo.customUrl = customUrl;
             cardMetadataCache.set(card.catId, cardInfo);
@@ -103,6 +208,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
         } catch (err) {
           console.error(`[PriceFetcher] Tier 0 Error resolving custom URL for CatID ${card.catId}:`, err.message);
         }
+        await sleep(100);
       }
     }
   }
@@ -129,7 +235,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
           const mtgoId = scryfallCard.mtgo_id || scryfallCard.mtgo_foil_id;
           if (!mtgoId) return;
 
-          const cardInfo = buildCardInfo(scryfallCard, mtgoId, priceSource);
+          const cardInfo = buildCardInfo(scryfallCard, mtgoId, priceSource, goatbotsPricesMap);
           cardMetadataCache.set(mtgoId, cardInfo);
           resultMap.set(mtgoId, cardInfo);
         });
@@ -175,7 +281,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
 
             if (!matchingOriginal) return;
 
-            const cardInfo = buildCardInfo(scryfallCard, matchingOriginal.catId, priceSource);
+            const cardInfo = buildCardInfo(scryfallCard, matchingOriginal.catId, priceSource, goatbotsPricesMap);
             cardMetadataCache.set(matchingOriginal.catId, cardInfo);
             resultMap.set(matchingOriginal.catId, cardInfo);
           });
@@ -194,8 +300,12 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
   cards.forEach((card) => {
     if (!resultMap.has(card.catId)) {
       const cached = cardMetadataCache.get(card.catId);
+      let priceTix = 0;
+      if (priceSource === 'goatbots' && goatbotsPricesMap[String(card.catId)] !== undefined) {
+        priceTix = parseFloat(goatbotsPricesMap[String(card.catId)]);
+      }
       if (cached) {
-        resultMap.set(card.catId, { ...cached, priceSource });
+        resultMap.set(card.catId, { ...cached, priceSource, priceTix: priceTix || cached.priceTix });
       } else {
         resultMap.set(card.catId, {
           catId: card.catId,
@@ -205,7 +315,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
           rarity: 'common',
           manaCost: '',
           typeLine: '',
-          priceTix: 0,
+          priceTix,
           baseTix: 0,
           priceSource,
           imageUri: 'https://svgs.scryfall.io/card-back.svg',

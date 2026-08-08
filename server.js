@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { parseDekFile, parseDekContent } from './services/dekParser.js';
 import { fetchCollectionPrices } from './services/priceFetcher.js';
-import { getSettings, saveSettings, getHistory, addSnapshot, deleteSnapshot, calculateMovements, setCustomLink } from './services/storage.js';
+import { getSettings, saveSettings, getHistory, addSnapshot, deleteSnapshot, calculateMovements, setCustomLink, clearHistory } from './services/storage.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -139,7 +139,8 @@ app.get('/api/collection', async (req, res) => {
       const syncResult = await performPriceSync();
       cachedEnrichedCards = syncResult.cards;
       cachedSummary = syncResult.summary;
-    } else if (hasCollection && cachedEnrichedCards.length > 0) {
+    } else if (hasCollection && cachedEnrichedCards.length > 0 && cachedSummary.timeframe !== reqTimeframe) {
+      // Re-calculate movements only when requested timeframe differs from cached summary
       const result = calculateMovements(cachedEnrichedCards, currentSource, reqTimeframe);
       cachedEnrichedCards = result.cards;
       cachedSummary = result.summary;
@@ -161,18 +162,22 @@ app.post('/api/upload-dek', async (req, res) => {
   try {
     const { xmlContent, filename } = req.body;
     if (!xmlContent || typeof xmlContent !== 'string') {
-      return res.status(400).json({ error: 'Nessun contenuto XML valido fornito.' });
+      return res.status(400).json({ error: 'No valid XML content provided.' });
     }
 
     const parsed = parseDekContent(xmlContent);
     if (parsed.length === 0) {
-      return res.status(400).json({ error: 'Il file caricato non contiene carte MTGO nel formato <Cards CatID="..." />.' });
+      return res.status(400).json({ error: 'The uploaded file does not contain MTGO cards in <Cards CatID="..." /> format.' });
     }
 
+    // Save newly uploaded collection file
     fs.writeFileSync(DATA_DEK, xmlContent, 'utf-8');
     console.log(`[Upload] New MTGO collection file uploaded: ${filename || 'Collection.dek'} (${parsed.length} cards).`);
 
+    // Reset history baseline so new collection P&L is clean
+    clearHistory();
     cachedEnrichedCards = [];
+    
     const result = await performPriceSync();
 
     res.json({
@@ -190,10 +195,18 @@ app.post('/api/upload-dek', async (req, res) => {
 app.get('/api/export/csv', (req, res) => {
   try {
     if (cachedEnrichedCards.length === 0) {
-      return res.status(400).send('Nessuna carta presente nella collezione.');
+      return res.status(400).send('No cards in the collection.');
     }
 
-    const headers = ['CatID', 'Nome', 'Set', 'Rarita', 'Quantita', 'Prezzo TIX', 'Prezzo Tempo 0 TIX', 'Prezzo Massimo TIX', 'Valore Totale TIX', 'Variazione %', 'Segnale Trading', 'Trend'];
+    const settings = getSettings();
+    const lang = settings.language || 'en';
+
+    const csvHeaders = {
+      en: ['CatID', 'Name', 'Set', 'Rarity', 'Quantity', 'Price TIX', 'Time 0 Price TIX', 'Peak Price TIX', 'Total Value TIX', 'Change %', 'Trading Signal', 'Trend'],
+      it: ['CatID', 'Nome', 'Set', 'Rarita', 'Quantita', 'Prezzo TIX', 'Prezzo Tempo 0 TIX', 'Prezzo Massimo TIX', 'Valore Totale TIX', 'Variazione %', 'Segnale Trading', 'Trend']
+    };
+
+    const headers = csvHeaders[lang] || csvHeaders.en;
     const rows = cachedEnrichedCards.map((c) => [
       c.catId,
       `"${(c.name || '').replace(/"/g, '""')}"`,
@@ -238,7 +251,7 @@ app.delete('/api/history', (req, res) => {
   try {
     const { timestamp } = req.body;
     if (!timestamp) {
-      return res.status(400).json({ error: 'Nessun timestamp specificato.' });
+      return res.status(400).json({ error: 'No timestamp specified.' });
     }
     deleteSnapshot(timestamp);
     const settings = getSettings();
@@ -262,7 +275,7 @@ app.post('/api/card/custom-link', async (req, res) => {
   try {
     const { catId, scryfallUrl } = req.body;
     if (!catId) {
-      return res.status(400).json({ error: 'CatID mancante.' });
+      return res.status(400).json({ error: 'Missing CatID.' });
     }
 
     setCustomLink(catId, scryfallUrl);

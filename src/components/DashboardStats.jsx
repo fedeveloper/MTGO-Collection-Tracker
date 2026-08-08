@@ -2,8 +2,10 @@ import React from 'react';
 import { DollarSign, TrendingUp, TrendingDown, Layers, ShoppingBag, Award } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
-export function DashboardStats({ cards = [], summary = {}, lang = 'en' }) {
+export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFilterEnabled = false }) {
   const t = translations[lang] || translations.en;
+
+  const targetCards = valueFilterEnabled ? cards.filter((c) => (c.priceTix || 0) >= 1.0) : cards;
 
   let totalCardsCount = 0;
   let totalGainers = 0;
@@ -13,7 +15,7 @@ export function DashboardStats({ cards = [], summary = {}, lang = 'en' }) {
   let bestGainer = null;
   let worstLoser = null;
 
-  cards.forEach((c) => {
+  targetCards.forEach((c) => {
     const qty = c.quantity || 1;
     totalCardsCount += qty;
 

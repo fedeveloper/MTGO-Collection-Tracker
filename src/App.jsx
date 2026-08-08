@@ -22,6 +22,7 @@ export function App() {
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [valueFilterEnabled, setValueFilterEnabled] = useState(false);
 
   const currentLang = settings?.language || 'en';
   const currentSource = settings?.priceSource || 'scryfall';
@@ -187,7 +188,7 @@ export function App() {
       />
 
       {/* Metric Cards & P&L Summary */}
-      <DashboardStats cards={cards} summary={summary} lang={currentLang} />
+      <DashboardStats cards={cards} summary={summary} lang={currentLang} valueFilterEnabled={valueFilterEnabled} />
 
       {/* Portfolio History Line Chart */}
       <PortfolioChart 
@@ -204,6 +205,8 @@ export function App() {
         timeframe={currentTimeframe}
         onChangeTimeframe={handleChangeTimeframe}
         lang={currentLang}
+        valueFilterEnabled={valueFilterEnabled}
+        onToggleValueFilter={(val) => setValueFilterEnabled(val)}
       />
 
       {/* Card Detail Modal */}

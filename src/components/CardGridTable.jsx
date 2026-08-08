@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { Search, TrendingUp, TrendingDown, LayoutGrid, List, Sparkles, ShoppingBag, Clock, ShieldAlert } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, LayoutGrid, List, Sparkles, ShoppingBag, Clock, ShieldAlert, Filter } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
-export function CardGridTable({ cards = [], onSelectCard, timeframe = 'time_zero', onChangeTimeframe, lang = 'en' }) {
+export function CardGridTable({ cards = [], onSelectCard, timeframe = 'time_zero', onChangeTimeframe, lang = 'en', valueFilterEnabled = false, onToggleValueFilter }) {
   const t = translations[lang] || translations.en;
 
-  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'gainers' | 'losers' | 'sell_signals' | 'valuable'
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'gainers' | 'losers' | 'sell_signals'
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('price_desc');
   const [viewStyle, setViewStyle] = useState('grid');
 
-  const filteredCards = cards.filter((card) => {
+  // Global pre-filter: exclude cards below 1 TIX when toggle is active
+  const baseCards = valueFilterEnabled ? cards.filter(c => (c.priceTix || 0) >= 1.0) : cards;
+
+  const filteredCards = baseCards.filter((card) => {
     const matchesSearch = 
       card.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (card.set && card.set.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -20,7 +23,6 @@ export function CardGridTable({ cards = [], onSelectCard, timeframe = 'time_zero
     if (filterMode === 'gainers') return card.trend === 'up' || card.timeZeroDeltaTix > 0;
     if (filterMode === 'losers') return card.trend === 'down' || card.timeZeroDeltaTix < 0;
     if (filterMode === 'sell_signals') return card.signal === 'take_profit' || card.signal === 'near_peak';
-    if (filterMode === 'valuable') return (card.priceTix || 0) >= 1.0;
 
     return true;
   });
@@ -87,37 +89,59 @@ export function CardGridTable({ cards = [], onSelectCard, timeframe = 'time_zero
 
       {/* Filter and Control Bar */}
       <div className="filter-bar glass-panel">
-        <div className="filter-tabs">
-          <button 
-            className={`tab-btn ${filterMode === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterMode('all')}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="filter-tabs">
+            <button 
+              className={`tab-btn ${filterMode === 'all' ? 'active' : ''}`}
+              onClick={() => setFilterMode('all')}
+            >
+              {t.allCards} ({baseCards.length})
+            </button>
+            <button 
+              className={`tab-btn tab-gainer ${filterMode === 'gainers' ? 'active' : ''}`}
+              onClick={() => setFilterMode('gainers')}
+            >
+              <TrendingUp size={15} /> {t.gainersTab} ({baseCards.filter(c => c.trend === 'up' || c.timeZeroDeltaTix > 0).length})
+            </button>
+            <button 
+              className={`tab-btn tab-loser ${filterMode === 'losers' ? 'active' : ''}`}
+              onClick={() => setFilterMode('losers')}
+            >
+              <TrendingDown size={15} /> {t.losersTab} ({baseCards.filter(c => c.trend === 'down' || c.timeZeroDeltaTix < 0).length})
+            </button>
+            <button 
+              className={`tab-btn ${filterMode === 'sell_signals' ? 'active' : ''}`}
+              style={{ background: filterMode === 'sell_signals' ? '#d97706' : undefined, color: filterMode === 'sell_signals' ? 'white' : '#fbbf24' }}
+              onClick={() => setFilterMode('sell_signals')}
+            >
+              <ShoppingBag size={15} /> {t.sellSignalsTab} ({baseCards.filter(c => c.signal === 'take_profit' || c.signal === 'near_peak').length})
+            </button>
+          </div>
+
+          {/* Global Value Filter Toggle */}
+          <button
+            className={`tab-btn ${valueFilterEnabled ? 'active' : ''}`}
+            onClick={() => onToggleValueFilter && onToggleValueFilter(!valueFilterEnabled)}
+            style={{
+              background: valueFilterEnabled ? 'linear-gradient(135deg, #d97706, #b45309)' : 'rgba(255, 255, 255, 0.05)',
+              color: valueFilterEnabled ? 'white' : '#fbbf24',
+              border: valueFilterEnabled ? '1px solid #f59e0b' : '1px solid var(--border-color)',
+              boxShadow: valueFilterEnabled ? '0 2px 12px rgba(245, 158, 11, 0.4)' : 'none',
+              padding: '8px 14px',
+              borderRadius: '6px',
+              fontFamily: 'var(--font-main)',
+              fontWeight: '700',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+            title={t.valuableTab}
           >
-            {t.allCards} ({cards.length})
-          </button>
-          <button 
-            className={`tab-btn tab-gainer ${filterMode === 'gainers' ? 'active' : ''}`}
-            onClick={() => setFilterMode('gainers')}
-          >
-            <TrendingUp size={15} /> {t.gainersTab} ({cards.filter(c => c.trend === 'up' || c.timeZeroDeltaTix > 0).length})
-          </button>
-          <button 
-            className={`tab-btn tab-loser ${filterMode === 'losers' ? 'active' : ''}`}
-            onClick={() => setFilterMode('losers')}
-          >
-            <TrendingDown size={15} /> {t.losersTab} ({cards.filter(c => c.trend === 'down' || c.timeZeroDeltaTix < 0).length})
-          </button>
-          <button 
-            className={`tab-btn ${filterMode === 'sell_signals' ? 'active' : ''}`}
-            style={{ background: filterMode === 'sell_signals' ? '#d97706' : undefined, color: filterMode === 'sell_signals' ? 'white' : '#fbbf24' }}
-            onClick={() => setFilterMode('sell_signals')}
-          >
-            <ShoppingBag size={15} /> {t.sellSignalsTab} ({cards.filter(c => c.signal === 'take_profit' || c.signal === 'near_peak').length})
-          </button>
-          <button 
-            className={`tab-btn ${filterMode === 'valuable' ? 'active' : ''}`}
-            onClick={() => setFilterMode('valuable')}
-          >
-            <Sparkles size={15} color="#fbbf24" /> {t.valuableTab}
+            <Filter size={14} /> {t.valuableTab}
           </button>
         </div>
 
@@ -172,7 +196,7 @@ export function CardGridTable({ cards = [], onSelectCard, timeframe = 'time_zero
       {sortedCards.length === 0 && (
         <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <p style={{ fontSize: '1.1rem', marginBottom: '8px' }}>{t.emptyFilter}</p>
-          <button className="btn btn-secondary" onClick={() => { setFilterMode('all'); setSearchQuery(''); }}>
+          <button className="btn btn-secondary" onClick={() => { setFilterMode('all'); setSearchQuery(''); if (valueFilterEnabled && onToggleValueFilter) onToggleValueFilter(false); }}>
             {t.resetFilters}
           </button>
         </div>
