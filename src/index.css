@@ -511,3 +511,199 @@ body {
 @keyframes spin {
   100% { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   RESPONSIVE DESIGN RULES (Tablet & Mobile Optimization)
+   Desktop layout is preserved 100% untouched.
+   ========================================================================== */
+
+/* Tablet / iPad (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .app-container {
+    padding: 16px 14px 40px 14px;
+  }
+
+  .navbar {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .nav-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .filter-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    scrollbar-width: none;
+  }
+
+  .filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-btn {
+    flex-shrink: 0;
+  }
+
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+  }
+
+  .card-art-wrap {
+    height: 210px;
+  }
+}
+
+/* Smartphone / Small Screens (max-width: 640px) */
+@media (max-width: 640px) {
+  .app-container {
+    padding: 10px 8px 30px 8px;
+  }
+
+  /* Header & Navbar */
+  .navbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .brand {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .brand-title {
+    font-size: 1.15rem;
+  }
+
+  .brand-subtitle {
+    font-size: 0.72rem;
+  }
+
+  .nav-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .nav-actions .btn {
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    width: 100%;
+  }
+
+  /* KPI Stats Grid: 2 columns on mobile for fast scanning */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .stat-title {
+    font-size: 0.72rem;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .stat-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .stat-badge {
+    font-size: 0.68rem;
+    padding: 3px 6px;
+  }
+
+  /* Controls & Search */
+  .filter-bar {
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+
+  .search-box {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .search-input {
+    font-size: 0.82rem;
+    padding: 8px 12px 8px 34px;
+  }
+
+  .sort-select {
+    width: 100%;
+    font-size: 0.82rem;
+    padding: 8px 12px;
+  }
+
+  /* Cards Grid: 2 columns on mobile like native shopping apps */
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .card-art-wrap {
+    height: 160px;
+  }
+
+  .card-body {
+    padding: 10px;
+  }
+
+  .card-name {
+    font-size: 0.82rem;
+  }
+
+  .card-set-info {
+    font-size: 0.72rem;
+    margin-bottom: 6px;
+  }
+
+  .price-tix {
+    font-size: 0.95rem;
+  }
+
+  .price-label {
+    font-size: 0.65rem;
+  }
+
+  /* Modals on Mobile */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-content {
+    padding: 16px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: var(--radius-md);
+  }
+
+  .modal-close {
+    top: 10px;
+    right: 10px;
+  }
+}
+
