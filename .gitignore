@@ -4,10 +4,18 @@ node_modules/
 # Production build output
 dist/
 
-# Local data storage and history (user specific)
+# Local data storage, runtime caches, and downloaded archives
 data/history.json
 data/settings.json
 data/Collection.dek
+data/goatbots_*
+data/*.json
+data/*.zip
+data/*.txt
+data/*.tmp
+
+# Exceptions: track custom_links.json if committed as baseline
+!data/custom_links.json
 
 # Logs
 logs/
@@ -20,5 +28,5 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Antigravity system logs
+# System logs
 .gemini/
