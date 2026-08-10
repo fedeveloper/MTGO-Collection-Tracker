@@ -124,7 +124,7 @@ export function PortfolioChart({ history = [], lang = 'en', priceSource = 'scryf
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
         ticks: { 
           color: '#64748b',
-          callback: (value) => `${value} TIX`
+          callback: (value) => `${parseFloat(Number(value).toFixed(2))} TIX`
         }
       }
     }
