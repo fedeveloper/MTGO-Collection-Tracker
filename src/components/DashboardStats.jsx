@@ -1,5 +1,5 @@
 import React from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Layers, ShoppingBag, Award } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Layers, ShoppingBag, Award, Receipt } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
 export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFilterEnabled = false }) {
@@ -40,12 +40,15 @@ export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFil
   const initialVal = summary.initialPortfolioValue !== undefined ? summary.initialPortfolioValue : currentVal;
   const netProfitTix = summary.netProfitTix !== undefined ? summary.netProfitTix : 0;
   const netProfitPercent = summary.netProfitPercent !== undefined ? summary.netProfitPercent : 0;
+  const totalPurchaseCost = summary.totalPurchaseCostTix !== undefined ? summary.totalPurchaseCostTix : 0;
+  const realizedPnl = summary.totalRealizedPnlTix !== undefined ? summary.totalRealizedPnlTix : 0;
 
   const isProfitPositive = netProfitTix >= 0;
+  const isRealizedPositive = realizedPnl >= 0;
 
   return (
     <div className="stats-grid">
-      {/* Total Portfolio Value & Net P&L */}
+      {/* Total Portfolio Value & Cost Basis */}
       <div className="stat-card glass-panel">
         <div className="stat-header">
           <span className="stat-title">{t.totalValue}</span>
@@ -58,9 +61,17 @@ export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFil
             {isProfitPositive ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
             <span>P&L: {isProfitPositive ? '+' : ''}{netProfitTix.toFixed(2)} TIX ({isProfitPositive ? '+' : ''}{netProfitPercent}%)</span>
           </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            ({t.initialValue}: {initialVal.toFixed(2)} TIX)
-          </span>
+          {totalPurchaseCost > 0 && (
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
+              {t.totalCostBasis}: <strong>{totalPurchaseCost.toFixed(2)} TIX</strong>
+            </span>
+          )}
+          {summary.totalSalesCount > 0 && (
+            <div className={`stat-badge ${isRealizedPositive ? 'badge-gainer' : 'badge-loser'}`} title={t.realizedPnl}>
+              <Receipt size={12} />
+              <span>{t.realizedPnl}: {isRealizedPositive ? '+' : ''}{realizedPnl.toFixed(2)} TIX</span>
+            </div>
+          )}
         </div>
       </div>
 

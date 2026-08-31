@@ -7,12 +7,14 @@ import { CardGridTable } from './components/CardGridTable';
 import { CardDetailModal } from './components/CardDetailModal';
 import { SchedulerModal } from './components/SchedulerModal';
 import { UploadModal } from './components/UploadModal';
+import { AddCardModal } from './components/AddCardModal';
 import { OnboardingView } from './components/OnboardingView';
 import { translations } from './i18n/translations';
 
 export function App() {
   const [cards, setCards] = useState([]);
   const [summary, setSummary] = useState({});
+  const [salesHistory, setSalesHistory] = useState([]);
   const [hasCollection, setHasCollection] = useState(true);
   const [history, setHistory] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -22,6 +24,7 @@ export function App() {
   const [selectedCard, setSelectedCard] = useState(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showAddCardModal, setShowAddCardModal] = useState(false);
   const [valueFilterEnabled, setValueFilterEnabled] = useState(false);
 
   const currentLang = settings?.language || 'en';
@@ -46,6 +49,7 @@ export function App() {
       setHasCollection(colRes.data.hasCollection ?? true);
       setCards(colRes.data.cards || []);
       setSummary(colRes.data.summary || {});
+      setSalesHistory(colRes.data.salesHistory || []);
       setIsSyncing(colRes.data.isSyncing || false);
       setHistory(histRes.data || []);
     } catch (err) {
@@ -69,6 +73,7 @@ export function App() {
       if (res.data && res.data.cards) {
         setCards(res.data.cards);
         if (res.data.summary) setSummary(res.data.summary);
+        if (res.data.salesHistory) setSalesHistory(res.data.salesHistory);
         const [histRes, setRes] = await Promise.all([
           axios.get(`/api/history?source=${currentSource}`),
           axios.get('/api/settings')
@@ -90,6 +95,7 @@ export function App() {
         setSettings(res.data.settings);
         if (res.data.cards) setCards(res.data.cards);
         if (res.data.summary) setSummary(res.data.summary);
+        if (res.data.salesHistory) setSalesHistory(res.data.salesHistory);
 
         const newSource = res.data.settings.priceSource || 'scryfall';
         const histRes = await axios.get(`/api/history?source=${newSource}`);
@@ -135,6 +141,63 @@ export function App() {
     }
   };
 
+  const handleSavePurchase = async (catId, purchasePriceTix) => {
+    try {
+      const res = await axios.post('/api/card/purchase', { catId, purchasePriceTix });
+      if (res.data && res.data.cards) {
+        setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
+        const updated = res.data.cards.find((c) => c.catId === catId);
+        if (updated) setSelectedCard(updated);
+      }
+    } catch (err) {
+      console.error('Save purchase price failed:', err);
+    }
+  };
+
+  const handleRecordSale = async (saleData) => {
+    try {
+      const res = await axios.post('/api/card/sell', saleData);
+      if (res.data) {
+        if (res.data.cards) setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
+        if (res.data.salesHistory) setSalesHistory(res.data.salesHistory);
+      }
+    } catch (err) {
+      console.error('Record sale failed:', err);
+    }
+  };
+
+  const handleUndoSale = async (saleId) => {
+    try {
+      const res = await axios.delete(`/api/sales/${saleId}`);
+      if (res.data) {
+        if (res.data.cards) setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
+        if (res.data.salesHistory) setSalesHistory(res.data.salesHistory);
+      }
+    } catch (err) {
+      console.error('Undo sale failed:', err);
+    }
+  };
+
+  const handleAddManualCard = async (cardData) => {
+    setIsSyncing(true);
+    try {
+      const res = await axios.post('/api/card/manual', cardData);
+      if (res.data && res.data.cards) {
+        setCards(res.data.cards);
+        if (res.data.summary) setSummary(res.data.summary);
+        if (res.data.salesHistory) setSalesHistory(res.data.salesHistory);
+        setHasCollection(true);
+      }
+    } catch (err) {
+      console.error('Add manual card failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleUploadSuccess = async (xmlContent, filename) => {
     setIsSyncing(true);
     try {
@@ -142,6 +205,7 @@ export function App() {
       if (res.data && res.data.cards) {
         setCards(res.data.cards);
         if (res.data.summary) setSummary(res.data.summary);
+        if (res.data.salesHistory) setSalesHistory(res.data.salesHistory);
         setHasCollection(true);
         const [histRes, setRes] = await Promise.all([
           axios.get(`/api/history?source=${currentSource}`),
@@ -183,6 +247,7 @@ export function App() {
         onSyncNow={handleSyncNow}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenUpload={() => setShowUploadModal(true)}
+        onOpenAddCard={() => setShowAddCardModal(true)}
         lang={currentLang}
         onToggleLang={handleToggleLang}
       />
@@ -198,10 +263,12 @@ export function App() {
         onDeleteSnapshot={handleDeleteSnapshot}
       />
 
-      {/* Cards Table & Grid View with Timeframe selector & Trading Signals */}
+      {/* Cards Table & Grid View with Timeframe selector, Sold tab, & Trading Signals */}
       <CardGridTable 
         cards={cards} 
+        salesHistory={salesHistory}
         onSelectCard={(card) => setSelectedCard(card)}
+        onUndoSale={handleUndoSale}
         timeframe={currentTimeframe}
         onChangeTimeframe={handleChangeTimeframe}
         lang={currentLang}
@@ -215,9 +282,19 @@ export function App() {
           card={selectedCard} 
           onClose={() => setSelectedCard(null)} 
           onSaveCustomLink={handleSaveCustomLink}
+          onSavePurchase={handleSavePurchase}
+          onRecordSale={handleRecordSale}
           lang={currentLang}
         />
       )}
+
+      {/* Add Card Modal */}
+      <AddCardModal 
+        isOpen={showAddCardModal}
+        onClose={() => setShowAddCardModal(false)}
+        onAddCard={handleAddManualCard}
+        lang={currentLang}
+      />
 
       {/* Settings & Scheduler Modal */}
       {showSettingsModal && (

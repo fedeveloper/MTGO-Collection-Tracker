@@ -4,7 +4,24 @@ import path from 'path';
 import fs from 'fs';
 import { parseDekFile, parseDekContent } from './services/dekParser.js';
 import { fetchCollectionPrices } from './services/priceFetcher.js';
-import { getSettings, saveSettings, getHistory, addSnapshot, deleteSnapshot, calculateMovements, setCustomLink, clearHistory } from './services/storage.js';
+import { 
+  getSettings, 
+  saveSettings, 
+  getHistory, 
+  addSnapshot, 
+  deleteSnapshot, 
+  calculateMovements, 
+  setCustomLink, 
+  clearHistory,
+  getPurchases,
+  savePurchase,
+  getSalesHistory,
+  recordSale,
+  undoSale,
+  getManualCards,
+  addManualCard,
+  deleteManualCard
+} from './services/storage.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,16 +52,18 @@ let syncIntervalTimer = null;
 
 async function performPriceSync() {
   const activeDek = getActiveDekPath();
-  if (!activeDek) {
-    console.log('[Sync] No Collection.dek file found. Waiting for upload.');
+  const manualCards = getManualCards();
+
+  if (!activeDek && manualCards.length === 0) {
+    console.log('[Sync] No Collection.dek file or manual cards found. Waiting for upload.');
     cachedEnrichedCards = [];
     cachedSummary = {};
-    return { cards: [], summary: {} };
+    return { cards: [], summary: {}, salesHistory: getSalesHistory() };
   }
 
   if (isSyncing) {
     console.log('[Sync] Price sync already in progress. Skipping...');
-    return { cards: cachedEnrichedCards, summary: cachedSummary };
+    return { cards: cachedEnrichedCards, summary: cachedSummary, salesHistory: getSalesHistory() };
   }
 
   try {
@@ -54,14 +73,29 @@ async function performPriceSync() {
     const priceSource = settings.priceSource || 'scryfall';
     const timeframe = settings.timeframe || 'time_zero';
 
-    console.log(`[Sync] Starting MTGO collection price sync from ${activeDek} using source [${priceSource}]...`);
+    console.log(`[Sync] Starting MTGO collection price sync using source [${priceSource}]...`);
 
-    const parsedCards = parseDekFile(activeDek);
+    const parsedDek = activeDek ? parseDekFile(activeDek) : [];
+    
+    // Merge .dek cards with manual cards
+    const cardMap = new Map();
+    parsedDek.forEach((c) => cardMap.set(c.catId, { ...c }));
+    manualCards.forEach((m) => {
+      if (cardMap.has(m.catId)) {
+        const existing = cardMap.get(m.catId);
+        cardMap.set(m.catId, { ...existing, quantity: Math.max(existing.quantity, m.quantity), isManual: true });
+      } else {
+        cardMap.set(m.catId, { catId: m.catId, name: m.name, quantity: m.quantity, isManual: true });
+      }
+    });
+
+    const parsedCards = Array.from(cardMap.values());
+
     if (parsedCards.length === 0) {
-      console.log('[Sync] Collection file is empty or invalid.');
+      console.log('[Sync] Collection is empty.');
       cachedEnrichedCards = [];
       cachedSummary = {};
-      return { cards: [], summary: {} };
+      return { cards: [], summary: {}, salesHistory: getSalesHistory() };
     }
 
     syncProgress.total = parsedCards.length;
@@ -130,7 +164,8 @@ function setupScheduler() {
 app.get('/api/collection', async (req, res) => {
   try {
     const dekPath = getActiveDekPath();
-    const hasCollection = !!dekPath;
+    const manualCards = getManualCards();
+    const hasCollection = !!dekPath || manualCards.length > 0;
     const settings = getSettings();
     const currentSource = settings.priceSource || 'scryfall';
     const reqTimeframe = req.query.timeframe || settings.timeframe || 'time_zero';
@@ -140,7 +175,6 @@ app.get('/api/collection', async (req, res) => {
       cachedEnrichedCards = syncResult.cards;
       cachedSummary = syncResult.summary;
     } else if (hasCollection && cachedEnrichedCards.length > 0 && cachedSummary.timeframe !== reqTimeframe) {
-      // Re-calculate movements only when requested timeframe differs from cached summary
       const result = calculateMovements(cachedEnrichedCards, currentSource, reqTimeframe);
       cachedEnrichedCards = result.cards;
       cachedSummary = result.summary;
@@ -150,6 +184,7 @@ app.get('/api/collection', async (req, res) => {
       hasCollection,
       cards: cachedEnrichedCards,
       summary: cachedSummary,
+      salesHistory: getSalesHistory(),
       isSyncing,
       syncProgress
     });
@@ -170,11 +205,9 @@ app.post('/api/upload-dek', async (req, res) => {
       return res.status(400).json({ error: 'The uploaded file does not contain MTGO cards in <Cards CatID="..." /> format.' });
     }
 
-    // Save newly uploaded collection file
     fs.writeFileSync(DATA_DEK, xmlContent, 'utf-8');
     console.log(`[Upload] New MTGO collection file uploaded: ${filename || 'Collection.dek'} (${parsed.length} cards).`);
 
-    // Reset history baseline so new collection P&L is clean
     clearHistory();
     cachedEnrichedCards = [];
     
@@ -184,7 +217,8 @@ app.post('/api/upload-dek', async (req, res) => {
       success: true,
       cardCount: parsed.length,
       cards: result.cards,
-      summary: result.summary
+      summary: result.summary,
+      salesHistory: getSalesHistory()
     });
   } catch (err) {
     console.error('[Upload Error]', err);
@@ -202,8 +236,8 @@ app.get('/api/export/csv', (req, res) => {
     const lang = settings.language || 'en';
 
     const csvHeaders = {
-      en: ['CatID', 'Name', 'Set', 'Rarity', 'Quantity', 'Price TIX', 'Time 0 Price TIX', 'Peak Price TIX', 'Total Value TIX', 'Change %', 'Trading Signal', 'Trend'],
-      it: ['CatID', 'Nome', 'Set', 'Rarita', 'Quantita', 'Prezzo TIX', 'Prezzo Tempo 0 TIX', 'Prezzo Massimo TIX', 'Valore Totale TIX', 'Variazione %', 'Segnale Trading', 'Trend']
+      en: ['CatID', 'Name', 'Set', 'Rarity', 'Quantity', 'Purchase Price TIX', 'Current Price TIX', 'Time 0 Price TIX', 'Peak Price TIX', 'Total Value TIX', 'Unrealized P&L TIX', 'Change %', 'Trading Signal', 'Trend'],
+      it: ['CatID', 'Nome', 'Set', 'Rarita', 'Quantita', 'Prezzo Acquisto TIX', 'Prezzo Attuale TIX', 'Prezzo Tempo 0 TIX', 'Prezzo Massimo TIX', 'Valore Totale TIX', 'P&L Non Realizzato TIX', 'Variazione %', 'Segnale Trading', 'Trend']
     };
 
     const headers = csvHeaders[lang] || csvHeaders.en;
@@ -213,10 +247,12 @@ app.get('/api/export/csv', (req, res) => {
       `"${c.set || ''}"`,
       `"${c.rarity || ''}"`,
       c.quantity || 1,
+      c.purchasePriceTix !== null ? c.purchasePriceTix.toFixed(2) : '-',
       (c.priceTix || 0).toFixed(2),
       (c.timeZeroPrice || 0).toFixed(2),
       (c.peakPrice || 0).toFixed(2),
       ((c.priceTix || 0) * (c.quantity || 1)).toFixed(2),
+      c.purchaseDeltaTix !== null ? (c.purchaseDeltaTix * c.quantity).toFixed(2) : '-',
       `${(c.deltaPercent || 0)}%`,
       `"${c.signal || 'neutral'}"`,
       c.trend || 'stable'
@@ -235,7 +271,7 @@ app.get('/api/export/csv', (req, res) => {
 app.post('/api/sync', async (req, res) => {
   try {
     const result = await performPriceSync();
-    res.json({ success: true, cards: result.cards, summary: result.summary });
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -258,14 +294,14 @@ app.delete('/api/history', (req, res) => {
     const source = settings.priceSource || 'scryfall';
     const timeframe = settings.timeframe || 'time_zero';
     
-    let result = { cards: cachedEnrichedCards, summary: cachedSummary };
+    let result = { cards: cachedEnrichedCards, summary: cachedSummary, salesHistory: getSalesHistory() };
     if (cachedEnrichedCards.length > 0) {
       result = calculateMovements(cachedEnrichedCards, source, timeframe);
       cachedEnrichedCards = result.cards;
       cachedSummary = result.summary;
     }
     
-    res.json({ success: true, history: getHistory(source), cards: result.cards, summary: result.summary });
+    res.json({ success: true, history: getHistory(source), cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -283,7 +319,108 @@ app.post('/api/card/custom-link', async (req, res) => {
 
     cachedEnrichedCards = [];
     const result = await performPriceSync();
-    res.json({ success: true, cards: result.cards, summary: result.summary });
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- New Endpoints: Purchase Price, Sales, Manual Cards ---
+
+app.post('/api/card/purchase', (req, res) => {
+  try {
+    const { catId, purchasePriceTix } = req.body;
+    if (!catId) {
+      return res.status(400).json({ error: 'Missing CatID.' });
+    }
+
+    savePurchase(catId, purchasePriceTix);
+    const settings = getSettings();
+    const result = calculateMovements(cachedEnrichedCards, settings.priceSource, settings.timeframe);
+    cachedEnrichedCards = result.cards;
+    cachedSummary = result.summary;
+
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/card/sell', (req, res) => {
+  try {
+    const { catId, name, set, quantity, purchasePriceTix, salePriceTix, imageUri } = req.body;
+    if (!catId) {
+      return res.status(400).json({ error: 'Missing CatID.' });
+    }
+
+    const salesHistory = recordSale({ catId, name, set, quantity, purchasePriceTix, salePriceTix, imageUri });
+    const settings = getSettings();
+    const result = calculateMovements(cachedEnrichedCards, settings.priceSource, settings.timeframe);
+    cachedEnrichedCards = result.cards;
+    cachedSummary = result.summary;
+
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/sales', (req, res) => {
+  try {
+    res.json({ salesHistory: getSalesHistory() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/sales/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: 'Missing Sale ID.' });
+    }
+
+    const salesHistory = undoSale(id);
+    const settings = getSettings();
+    const result = calculateMovements(cachedEnrichedCards, settings.priceSource, settings.timeframe);
+    cachedEnrichedCards = result.cards;
+    cachedSummary = result.summary;
+
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/card/manual', async (req, res) => {
+  try {
+    const { catId, name, quantity, purchasePriceTix } = req.body;
+    if (!catId || !name) {
+      return res.status(400).json({ error: 'Missing CatID or Card Name.' });
+    }
+
+    addManualCard({ catId, name, quantity, purchasePriceTix });
+    cachedEnrichedCards = [];
+    const result = await performPriceSync();
+
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/card/manual/:catId', async (req, res) => {
+  try {
+    const { catId } = req.params;
+    if (!catId) {
+      return res.status(400).json({ error: 'Missing CatID.' });
+    }
+
+    deleteManualCard(catId);
+    cachedEnrichedCards = [];
+    const result = await performPriceSync();
+
+    res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -304,20 +441,23 @@ app.post('/api/settings', async (req, res) => {
 
     let cards = cachedEnrichedCards;
     let summary = cachedSummary;
+    let salesHistory = getSalesHistory();
     if (sourceChanged) {
       console.log(`[Settings] Price source changed to [${updated.priceSource}]. Triggering sync...`);
       const result = await performPriceSync();
       cards = result.cards;
       summary = result.summary;
+      salesHistory = result.salesHistory;
     } else {
       const result = calculateMovements(cachedEnrichedCards, updated.priceSource, updated.timeframe);
       cards = result.cards;
       summary = result.summary;
+      salesHistory = result.salesHistory;
       cachedEnrichedCards = cards;
       cachedSummary = summary;
     }
 
-    res.json({ success: true, settings: updated, cards, summary });
+    res.json({ success: true, settings: updated, cards, summary, salesHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -334,7 +474,7 @@ if (fs.existsSync(distPath)) {
 app.listen(PORT, () => {
   console.log(`[MTGO Tracker Backend] Running on http://localhost:${PORT}`);
   setupScheduler();
-  if (getActiveDekPath()) {
+  if (getActiveDekPath() || getManualCards().length > 0) {
     performPriceSync().catch((err) => console.error('[Initial Sync Error]', err));
   }
 });

@@ -5,6 +5,9 @@ const DATA_DIR = path.resolve(process.cwd(), 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const CUSTOM_LINKS_FILE = path.join(DATA_DIR, 'custom_links.json');
+const CARD_PURCHASES_FILE = path.join(DATA_DIR, 'card_purchases.json');
+const SALES_HISTORY_FILE = path.join(DATA_DIR, 'sales_history.json');
+const MANUAL_CARDS_FILE = path.join(DATA_DIR, 'manual_cards.json');
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -71,6 +74,117 @@ export function setCustomLink(catId, scryfallUrl) {
   return links;
 }
 
+// --- Card Purchase Prices ---
+export function getPurchases() {
+  if (!fs.existsSync(CARD_PURCHASES_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(CARD_PURCHASES_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+export function savePurchase(catId, purchasePriceTix) {
+  const purchases = getPurchases();
+  const catKey = String(catId);
+  if (purchasePriceTix !== null && purchasePriceTix !== undefined && purchasePriceTix !== '' && !isNaN(parseFloat(purchasePriceTix))) {
+    purchases[catKey] = {
+      purchasePriceTix: parseFloat(purchasePriceTix),
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    delete purchases[catKey];
+  }
+  writeJsonAtomic(CARD_PURCHASES_FILE, purchases);
+  return purchases;
+}
+
+// --- Sales History ---
+export function getSalesHistory() {
+  if (!fs.existsSync(SALES_HISTORY_FILE)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(SALES_HISTORY_FILE, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
+export function recordSale({ catId, name, set, quantity, purchasePriceTix = 0, salePriceTix = 0, imageUri = '' }) {
+  const sales = getSalesHistory();
+  const q = Math.max(1, parseInt(quantity) || 1);
+  const pPrice = parseFloat(purchasePriceTix) || 0;
+  const sPrice = parseFloat(salePriceTix) || 0;
+  const realizedPnlTix = Math.round((sPrice - pPrice) * q * 100) / 100;
+
+  const saleRecord = {
+    id: `sale_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    catId: parseInt(catId),
+    name: name || 'MTG Card',
+    set: set || 'MTG',
+    quantity: q,
+    purchasePriceTix: pPrice,
+    salePriceTix: sPrice,
+    realizedPnlTix,
+    imageUri,
+    saleDate: new Date().toISOString()
+  };
+
+  sales.unshift(saleRecord);
+  writeJsonAtomic(SALES_HISTORY_FILE, sales);
+  return sales;
+}
+
+export function undoSale(saleId) {
+  const sales = getSalesHistory();
+  const filtered = sales.filter((s) => s.id !== saleId);
+  writeJsonAtomic(SALES_HISTORY_FILE, filtered);
+  return filtered;
+}
+
+// --- Manual Cards ---
+export function getManualCards() {
+  if (!fs.existsSync(MANUAL_CARDS_FILE)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(MANUAL_CARDS_FILE, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
+export function addManualCard({ catId, name, quantity = 1, purchasePriceTix = null }) {
+  const manual = getManualCards();
+  const existingIdx = manual.findIndex((c) => String(c.catId) === String(catId));
+  const parsedCatId = parseInt(catId);
+  const cardObj = {
+    catId: parsedCatId,
+    name: name.trim(),
+    quantity: Math.max(1, parseInt(quantity) || 1),
+    purchasePriceTix: purchasePriceTix !== null && !isNaN(parseFloat(purchasePriceTix)) ? parseFloat(purchasePriceTix) : null,
+    isManual: true,
+    addedAt: new Date().toISOString()
+  };
+
+  if (existingIdx >= 0) {
+    manual[existingIdx] = cardObj;
+  } else {
+    manual.push(cardObj);
+  }
+
+  if (purchasePriceTix !== null && !isNaN(parseFloat(purchasePriceTix))) {
+    savePurchase(parsedCatId, purchasePriceTix);
+  }
+
+  writeJsonAtomic(MANUAL_CARDS_FILE, manual);
+  return manual;
+}
+
+export function deleteManualCard(catId) {
+  const manual = getManualCards();
+  const filtered = manual.filter((c) => String(c.catId) !== String(catId));
+  writeJsonAtomic(MANUAL_CARDS_FILE, filtered);
+  return filtered;
+}
+
 export function getHistory(priceSource) {
   if (!fs.existsSync(HISTORY_FILE)) {
     return [];
@@ -134,10 +248,19 @@ export function deleteSnapshot(timestamp) {
  * @param {Array<object>} cards Current cards list with prices
  * @param {string} priceSource Current price source
  * @param {string} timeframe - 'time_zero' (Time 0 / Initial snapshot) | 'last_check' (Previous snapshot)
- * @returns {{ cards: Array<object>, summary: object }} Cards enriched with movements & decision signals + summary
+ * @returns {{ cards: Array<object>, summary: object, salesHistory: Array<object> }} Cards enriched with movements & decision signals + summary
  */
 export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 'time_zero') {
   const sourceHistory = getHistory(priceSource);
+  const purchases = getPurchases();
+  const sales = getSalesHistory();
+
+  // Sum total sold quantity per catId
+  const soldQuantities = {};
+  sales.forEach((s) => {
+    const k = String(s.catId);
+    soldQuantities[k] = (soldQuantities[k] || 0) + (s.quantity || 1);
+  });
 
   // Determine reference snapshot based on timeframe
   let referenceSnapshot = null;
@@ -168,15 +291,32 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
 
   let initialPortfolioValue = 0;
   let currentPortfolioValue = 0;
+  let totalPurchaseCostTix = 0;
 
-  const enrichedCards = cards.map((card) => {
+  const activeCards = [];
+
+  cards.forEach((card) => {
+    const catKey = String(card.catId);
+    const totalQty = card.quantity || 1;
+    const soldQty = soldQuantities[catKey] || 0;
+    const activeQty = Math.max(0, totalQty - soldQty);
+
+    if (activeQty <= 0) return; // Completely sold out, excluded from active portfolio
+
+    const savedPurchase = purchases[catKey]?.purchasePriceTix;
+    const purchasePriceTix = savedPurchase !== undefined ? savedPurchase : null;
+
     const currPrice = card.priceTix || 0;
     const refPrice = refPrices[card.catId] !== undefined ? refPrices[card.catId] : currPrice;
     const timeZeroPrice = timeZeroPrices[card.catId] !== undefined ? timeZeroPrices[card.catId] : currPrice;
     const peakPrice = peakPrices[card.catId] !== undefined ? peakPrices[card.catId] : currPrice;
 
-    initialPortfolioValue += timeZeroPrice * (card.quantity || 1);
-    currentPortfolioValue += currPrice * (card.quantity || 1);
+    initialPortfolioValue += timeZeroPrice * activeQty;
+    currentPortfolioValue += currPrice * activeQty;
+
+    if (purchasePriceTix !== null) {
+      totalPurchaseCostTix += purchasePriceTix * activeQty;
+    }
 
     const deltaTix = Math.round((currPrice - refPrice) * 100) / 100;
     let deltaPercent = 0;
@@ -194,14 +334,23 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
       timeZeroDeltaPercent = 100;
     }
 
+    // P&L vs Purchase Price (if purchase price is set)
+    let purchaseDeltaTix = null;
+    let purchaseDeltaPercent = null;
+    if (purchasePriceTix !== null) {
+      purchaseDeltaTix = Math.round((currPrice - purchasePriceTix) * 100) / 100;
+      if (purchasePriceTix > 0) {
+        purchaseDeltaPercent = Math.round(((currPrice - purchasePriceTix) / purchasePriceTix) * 1000) / 10;
+      } else if (currPrice > 0) {
+        purchaseDeltaPercent = 100;
+      }
+    }
+
     let trend = 'stable';
     if (deltaTix > 0.001) trend = 'up';
     else if (deltaTix < -0.001) trend = 'down';
 
     // --- Trading Decision Signals ---
-    // 1. Take Profit (Vendi): Gain from Time 0 is >= 35% or >= +0.75 TIX net
-    // 2. Near Peak (Prezzo Massimo): Within 5% of all-time high
-    // 3. Stop Loss / Loss: Loss from Time 0 is <= -30%
     let signal = 'neutral';
     if (timeZeroDeltaPercent >= 35 || (timeZeroDeltaTix >= 0.75 && timeZeroDeltaPercent >= 20)) {
       signal = 'take_profit';
@@ -211,8 +360,14 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
       signal = 'stop_loss';
     }
 
-    return {
+    activeCards.push({
       ...card,
+      quantity: activeQty,
+      originalQuantity: totalQty,
+      soldQuantity: soldQty,
+      purchasePriceTix,
+      purchaseDeltaTix,
+      purchaseDeltaPercent,
       previousPriceTix: refPrice,
       timeZeroPrice,
       peakPrice,
@@ -222,8 +377,23 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
       timeZeroDeltaPercent,
       trend,
       signal
-    };
+    });
   });
+
+  // Calculate Realized P&L summary
+  let totalRealizedPnlTix = 0;
+  let totalRealizedSalesTix = 0;
+  let totalRealizedCostTix = 0;
+  sales.forEach((s) => {
+    totalRealizedPnlTix += s.realizedPnlTix || 0;
+    totalRealizedSalesTix += (s.salePriceTix || 0) * (s.quantity || 1);
+    totalRealizedCostTix += (s.purchasePriceTix || 0) * (s.quantity || 1);
+  });
+
+  totalRealizedPnlTix = Math.round(totalRealizedPnlTix * 100) / 100;
+  totalRealizedSalesTix = Math.round(totalRealizedSalesTix * 100) / 100;
+  totalRealizedCostTix = Math.round(totalRealizedCostTix * 100) / 100;
+  totalPurchaseCostTix = Math.round(totalPurchaseCostTix * 100) / 100;
 
   const netProfitTix = Math.round((currentPortfolioValue - initialPortfolioValue) * 100) / 100;
   let netProfitPercent = 0;
@@ -237,9 +407,14 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
     currentPortfolioValue: Math.round(currentPortfolioValue * 100) / 100,
     netProfitTix,
     netProfitPercent,
+    totalPurchaseCostTix,
+    totalRealizedPnlTix,
+    totalRealizedSalesTix,
+    totalRealizedCostTix,
+    totalSalesCount: sales.length,
     timeZeroTimestamp: timeZeroSnapshot?.timestamp || null,
     totalSnapshots: sourceHistory.length
   };
 
-  return { cards: enrichedCards, summary };
+  return { cards: activeCards, summary, salesHistory: sales };
 }

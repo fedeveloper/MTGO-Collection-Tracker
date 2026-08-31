@@ -1,8 +1,8 @@
 import React from 'react';
-import { Layers, RefreshCw, Clock, Settings, TrendingUp, UploadCloud, Download, Globe } from 'lucide-react';
+import { Layers, RefreshCw, Clock, Settings, TrendingUp, UploadCloud, Download, Globe, PlusCircle } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
-export function Navbar({ lastSyncTime, isSyncing, onSyncNow, onOpenSettings, onOpenUpload, lang = 'en', onToggleLang }) {
+export function Navbar({ lastSyncTime, isSyncing, onSyncNow, onOpenSettings, onOpenUpload, onOpenAddCard, lang = 'en', onToggleLang }) {
   const t = translations[lang] || translations.en;
 
   const formatTime = (isoString) => {
@@ -46,6 +46,15 @@ export function Navbar({ lastSyncTime, isSyncing, onSyncNow, onOpenSettings, onO
         >
           <Globe size={15} color="var(--accent-cyan)" />
           <span>{lang === 'en' ? 'EN' : 'IT'}</span>
+        </button>
+
+        <button 
+          className="btn btn-secondary" 
+          onClick={onOpenAddCard}
+          title={t.addCard}
+        >
+          <PlusCircle size={16} color="var(--accent-cyan)" />
+          <span>{t.addCard}</span>
         </button>
 
         <button 
