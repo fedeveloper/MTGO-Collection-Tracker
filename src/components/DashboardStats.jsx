@@ -1,5 +1,5 @@
 import React from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Layers, ShoppingBag, Award, Receipt } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Layers, ShoppingBag, Award, Receipt, Tag } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
 export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFilterEnabled = false }) {
@@ -62,9 +62,10 @@ export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFil
             <span>P&L: {isProfitPositive ? '+' : ''}{netProfitTix.toFixed(2)} TIX ({isProfitPositive ? '+' : ''}{netProfitPercent}%)</span>
           </div>
           {totalPurchaseCost > 0 && (
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>
-              {t.totalCostBasis}: <strong>{totalPurchaseCost.toFixed(2)} TIX</strong>
-            </span>
+            <div className={`stat-badge ${summary.unrealizedPnlOnCostTix >= 0 ? 'badge-gainer' : 'badge-loser'}`} title="P&L vs Cost Basis">
+              <Tag size={12} />
+              <span>Acquisti: {summary.unrealizedPnlOnCostTix >= 0 ? '+' : ''}{summary.unrealizedPnlOnCostTix?.toFixed(2)} TIX ({summary.unrealizedPnlOnCostPercent >= 0 ? '+' : ''}{summary.unrealizedPnlOnCostPercent}%)</span>
+            </div>
           )}
           {summary.totalSalesCount > 0 && (
             <div className={`stat-badge ${isRealizedPositive ? 'badge-gainer' : 'badge-loser'}`} title={t.realizedPnl}>

@@ -33,6 +33,8 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
     if (sortBy === 'price_asc') return (a.priceTix || 0) - (b.priceTix || 0);
     if (sortBy === 'gainers') return (b.deltaPercent || 0) - (a.deltaPercent || 0);
     if (sortBy === 'losers') return (a.deltaPercent || 0) - (b.deltaPercent || 0);
+    if (sortBy === 'purchase_gainers') return (b.purchaseDeltaPercent !== null ? b.purchaseDeltaPercent : -9999) - (a.purchaseDeltaPercent !== null ? a.purchaseDeltaPercent : -9999);
+    if (sortBy === 'purchase_losers') return (a.purchaseDeltaPercent !== null ? a.purchaseDeltaPercent : 9999) - (b.purchaseDeltaPercent !== null ? b.purchaseDeltaPercent : 9999);
     if (sortBy === 'qty') return (b.quantity || 0) - (a.quantity || 0);
     if (sortBy === 'name') return a.name.localeCompare(b.name);
     return 0;
@@ -107,6 +109,12 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
               onClick={() => onChangeTimeframe && onChangeTimeframe('last_check')}
             >
               {t.timeframeLastCheck}
+            </button>
+            <button 
+              className={`tab-btn ${timeframe === 'purchase_price' ? 'active' : ''}`}
+              onClick={() => onChangeTimeframe && onChangeTimeframe('purchase_price')}
+            >
+              {t.timeframePurchasePrice}
             </button>
           </div>
         </div>
@@ -206,6 +214,8 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
                 <option value="price_asc">{t.sortPriceAsc}</option>
                 <option value="gainers">{t.sortGainers}</option>
                 <option value="losers">{t.sortLosers}</option>
+                <option value="purchase_gainers">{t.sortPurchaseGainers}</option>
+                <option value="purchase_losers">{t.sortPurchaseLosers}</option>
                 <option value="qty">{t.sortQuantity}</option>
                 <option value="name">{t.sortName}</option>
               </select>

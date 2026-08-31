@@ -292,6 +292,7 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
   let initialPortfolioValue = 0;
   let currentPortfolioValue = 0;
   let totalPurchaseCostTix = 0;
+  let totalPurchasedCardsValue = 0;
 
   const activeCards = [];
 
@@ -307,16 +308,35 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
     const purchasePriceTix = savedPurchase !== undefined ? savedPurchase : null;
 
     const currPrice = card.priceTix || 0;
-    const refPrice = refPrices[card.catId] !== undefined ? refPrices[card.catId] : currPrice;
     const timeZeroPrice = timeZeroPrices[card.catId] !== undefined ? timeZeroPrices[card.catId] : currPrice;
     const peakPrice = peakPrices[card.catId] !== undefined ? peakPrices[card.catId] : currPrice;
 
+    // Calculate P&L vs Purchase Price (if purchase price is set)
+    let purchaseDeltaTix = null;
+    let purchaseDeltaPercent = null;
+    if (purchasePriceTix !== null) {
+      purchaseDeltaTix = Math.round((currPrice - purchasePriceTix) * 100) / 100;
+      if (purchasePriceTix > 0) {
+        purchaseDeltaPercent = Math.round(((currPrice - purchasePriceTix) / purchasePriceTix) * 1000) / 10;
+      } else if (currPrice > 0) {
+        purchaseDeltaPercent = 100;
+      }
+      totalPurchaseCostTix += purchasePriceTix * activeQty;
+      totalPurchasedCardsValue += currPrice * activeQty;
+    }
+
+    // Determine reference price based on timeframe ('time_zero' | 'last_check' | 'purchase_price')
+    let refPrice = currPrice;
+    if (timeframe === 'purchase_price' && purchasePriceTix !== null) {
+      refPrice = purchasePriceTix;
+    } else if (timeframe === 'last_check') {
+      refPrice = refPrices[card.catId] !== undefined ? refPrices[card.catId] : currPrice;
+    } else {
+      refPrice = timeZeroPrice;
+    }
+
     initialPortfolioValue += timeZeroPrice * activeQty;
     currentPortfolioValue += currPrice * activeQty;
-
-    if (purchasePriceTix !== null) {
-      totalPurchaseCostTix += purchasePriceTix * activeQty;
-    }
 
     const deltaTix = Math.round((currPrice - refPrice) * 100) / 100;
     let deltaPercent = 0;
@@ -332,18 +352,6 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
       timeZeroDeltaPercent = Math.round(((currPrice - timeZeroPrice) / timeZeroPrice) * 1000) / 10;
     } else if (currPrice > 0) {
       timeZeroDeltaPercent = 100;
-    }
-
-    // P&L vs Purchase Price (if purchase price is set)
-    let purchaseDeltaTix = null;
-    let purchaseDeltaPercent = null;
-    if (purchasePriceTix !== null) {
-      purchaseDeltaTix = Math.round((currPrice - purchasePriceTix) * 100) / 100;
-      if (purchasePriceTix > 0) {
-        purchaseDeltaPercent = Math.round(((currPrice - purchasePriceTix) / purchasePriceTix) * 1000) / 10;
-      } else if (currPrice > 0) {
-        purchaseDeltaPercent = 100;
-      }
     }
 
     let trend = 'stable';
@@ -368,6 +376,7 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
       purchasePriceTix,
       purchaseDeltaTix,
       purchaseDeltaPercent,
+      hasPurchasePrice: purchasePriceTix !== null,
       previousPriceTix: refPrice,
       timeZeroPrice,
       peakPrice,
@@ -394,6 +403,13 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
   totalRealizedSalesTix = Math.round(totalRealizedSalesTix * 100) / 100;
   totalRealizedCostTix = Math.round(totalRealizedCostTix * 100) / 100;
   totalPurchaseCostTix = Math.round(totalPurchaseCostTix * 100) / 100;
+  totalPurchasedCardsValue = Math.round(totalPurchasedCardsValue * 100) / 100;
+
+  const unrealizedPnlOnCostTix = Math.round((totalPurchasedCardsValue - totalPurchaseCostTix) * 100) / 100;
+  let unrealizedPnlOnCostPercent = 0;
+  if (totalPurchaseCostTix > 0) {
+    unrealizedPnlOnCostPercent = Math.round(((totalPurchasedCardsValue - totalPurchaseCostTix) / totalPurchaseCostTix) * 1000) / 10;
+  }
 
   const netProfitTix = Math.round((currentPortfolioValue - initialPortfolioValue) * 100) / 100;
   let netProfitPercent = 0;
@@ -408,6 +424,9 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
     netProfitTix,
     netProfitPercent,
     totalPurchaseCostTix,
+    totalPurchasedCardsValue,
+    unrealizedPnlOnCostTix,
+    unrealizedPnlOnCostPercent,
     totalRealizedPnlTix,
     totalRealizedSalesTix,
     totalRealizedCostTix,
