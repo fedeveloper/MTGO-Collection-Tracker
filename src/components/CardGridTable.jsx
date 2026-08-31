@@ -11,8 +11,11 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
   const [viewStyle, setViewStyle] = useState('grid');
   const [undoConfirmId, setUndoConfirmId] = useState(null);
 
-  // Global pre-filter: exclude cards below 1 TIX when toggle is active
-  const baseCards = valueFilterEnabled ? cards.filter(c => (c.priceTix || 0) >= 1.0) : cards;
+  // Global pre-filter: exclude cards below 1 TIX when toggle is active, and filter purchase prices when purchase_price benchmark is selected
+  let baseCards = valueFilterEnabled ? cards.filter(c => (c.priceTix || 0) >= 1.0) : cards;
+  if (timeframe === 'purchase_price') {
+    baseCards = baseCards.filter((c) => c.purchasePriceTix !== null && c.purchasePriceTix !== undefined);
+  }
 
   const filteredCards = baseCards.filter((card) => {
     const matchesSearch = 
