@@ -24,8 +24,8 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
 
     if (!matchesSearch) return false;
 
-    if (filterMode === 'gainers') return card.trend === 'up' || card.timeZeroDeltaTix > 0;
-    if (filterMode === 'losers') return card.trend === 'down' || card.timeZeroDeltaTix < 0;
+    if (filterMode === 'gainers') return card.deltaTix > 0;
+    if (filterMode === 'losers') return card.deltaTix < 0;
     if (filterMode === 'sell_signals') return card.signal === 'take_profit' || card.signal === 'near_peak';
 
     return true;
@@ -137,13 +137,13 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
               className={`tab-btn tab-gainer ${filterMode === 'gainers' ? 'active' : ''}`}
               onClick={() => setFilterMode('gainers')}
             >
-              <TrendingUp size={15} /> {t.gainersTab} ({baseCards.filter(c => c.trend === 'up' || c.timeZeroDeltaTix > 0).length})
+              <TrendingUp size={15} /> {t.gainersTab} ({baseCards.filter(c => c.deltaTix > 0).length})
             </button>
             <button 
               className={`tab-btn tab-loser ${filterMode === 'losers' ? 'active' : ''}`}
               onClick={() => setFilterMode('losers')}
             >
-              <TrendingDown size={15} /> {t.losersTab} ({baseCards.filter(c => c.trend === 'down' || c.timeZeroDeltaTix < 0).length})
+              <TrendingDown size={15} /> {t.losersTab} ({baseCards.filter(c => c.deltaTix < 0).length})
             </button>
             <button 
               className={`tab-btn ${filterMode === 'sell_signals' ? 'active' : ''}`}

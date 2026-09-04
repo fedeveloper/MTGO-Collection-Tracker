@@ -5,7 +5,10 @@ import { translations } from '../i18n/translations';
 export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFilterEnabled = false }) {
   const t = translations[lang] || translations.en;
 
-  const targetCards = valueFilterEnabled ? cards.filter((c) => (c.priceTix || 0) >= 1.0) : cards;
+  let targetCards = valueFilterEnabled ? cards.filter((c) => (c.priceTix || 0) >= 1.0) : cards;
+  if (summary.timeframe === 'purchase_price') {
+    targetCards = targetCards.filter((c) => c.purchasePriceTix !== null && c.purchasePriceTix !== undefined);
+  }
 
   let totalCardsCount = 0;
   let totalGainers = 0;
@@ -23,12 +26,12 @@ export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFil
       takeProfitCount++;
     }
 
-    if (c.trend === 'up' || c.timeZeroDeltaTix > 0) {
+    if (c.deltaTix > 0) {
       totalGainers++;
       if (!bestGainer || c.deltaPercent > bestGainer.deltaPercent) {
         bestGainer = c;
       }
-    } else if (c.trend === 'down' || c.timeZeroDeltaTix < 0) {
+    } else if (c.deltaTix < 0) {
       totalLosers++;
       if (!worstLoser || c.deltaPercent < worstLoser.deltaPercent) {
         worstLoser = c;
