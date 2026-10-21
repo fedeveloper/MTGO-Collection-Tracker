@@ -108,7 +108,7 @@ async function runPriceSync() {
     
     // Merge .dek cards with manual cards
     const cardMap = new Map();
-    parsedDek.forEach((c) => cardMap.set(c.catId, { ...c }));
+    parsedDek.forEach((c) => cardMap.set(c.catId, { ...c, fromDek: true }));
     manualCards.forEach((m) => {
       if (cardMap.has(m.catId)) {
         const existing = cardMap.get(m.catId);
@@ -231,6 +231,8 @@ app.post('/api/upload-dek', async (req, res) => {
     await waitForIdleSync();
 
     fs.writeFileSync(DATA_DEK, xmlContent, 'utf-8');
+    // Sales recorded before this upload are already reflected in the new .dek
+    saveSettings({ ...getSettings(), collectionImportedAt: new Date().toISOString() });
     console.log(`[Upload] New MTGO collection file uploaded: ${filename || 'Collection.dek'} (${parsed.length} cards).`);
 
     clearHistory();
@@ -427,6 +429,10 @@ app.post('/api/card/manual', async (req, res) => {
     if (!catId || !name) {
       return res.status(400).json({ error: 'Missing CatID or Card Name.' });
     }
+    const parsedCatId = Number(catId);
+    if (!Number.isInteger(parsedCatId) || parsedCatId < 1 || parsedCatId > 999999) {
+      return res.status(400).json({ error: 'Invalid CatID: it must be a whole number between 1 and 999999.' });
+    }
 
     addManualCard({ catId, name, quantity, purchasePriceTix });
     const result = await performPriceSync({ force: true });
@@ -460,8 +466,8 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', async (req, res) => {
   try {
     const current = getSettings();
-    // Sync timestamps are server-owned; the client echoes back its (possibly stale) copy
-    const { lastSyncTime, nextSyncTime, ...changes } = req.body || {};
+    // Sync and import timestamps are server-owned; the client echoes back its (possibly stale) copy
+    const { lastSyncTime, nextSyncTime, collectionImportedAt, ...changes } = req.body || {};
     const sourceChanged = changes.priceSource && changes.priceSource !== current.priceSource;
     const updated = { ...current, ...changes };
     

@@ -49,6 +49,16 @@ function unzipBuffer(zipBuffer) {
 }
 
 /**
+ * Scryfall only accepts `mtgo_id` identifiers of 3-6 digits and rejects the whole
+ * /cards/collection batch with a 400 if any identifier is outside that range.
+ * @param {number} catId
+ * @returns {boolean}
+ */
+export function isScryfallMtgoId(catId) {
+  return Number.isInteger(catId) && catId >= 100 && catId <= 999999;
+}
+
+/**
  * Delay execution for ms milliseconds
  */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -235,8 +245,8 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
     }
   }
 
-  // Filter out cards already resolved by Tier 0
-  const remainingCards = cards.filter((c) => !resultMap.has(c.catId));
+  // Filter out cards already resolved by Tier 0; CatIDs Scryfall can't take go straight to the name fallback
+  const remainingCards = cards.filter((c) => !resultMap.has(c.catId) && isScryfallMtgoId(c.catId));
 
   const BATCH_SIZE = 75;
 

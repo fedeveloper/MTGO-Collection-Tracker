@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS = {
   priceSource: 'scryfall',
   language: 'en',
   timeframe: 'time_zero', // 'time_zero' (default) | 'last_check'
+  collectionImportedAt: null, // last .dek upload: earlier sales are already reflected in it
   lastSyncTime: null,
   nextSyncTime: null
 };
@@ -253,12 +254,18 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
   const sourceHistory = getHistory(priceSource);
   const purchases = getPurchases();
   const sales = getSalesHistory();
+  const { collectionImportedAt } = getSettings();
 
-  // Sum total sold quantity per catId
+  // Sum sold quantity per catId. A .dek uploaded after a sale already reflects it, so for cards
+  // that come from the .dek only sales made after the last upload are subtracted.
   const soldQuantities = {};
+  const soldSinceImport = {};
   sales.forEach((s) => {
     const k = String(s.catId);
     soldQuantities[k] = (soldQuantities[k] || 0) + (s.quantity || 1);
+    if (!collectionImportedAt || s.saleDate > collectionImportedAt) {
+      soldSinceImport[k] = (soldSinceImport[k] || 0) + (s.quantity || 1);
+    }
   });
 
   // Determine reference snapshot based on timeframe
@@ -298,7 +305,7 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
   cards.forEach((card) => {
     const catKey = String(card.catId);
     const totalQty = card.quantity || 1;
-    const soldQty = soldQuantities[catKey] || 0;
+    const soldQty = (card.fromDek ? soldSinceImport[catKey] : soldQuantities[catKey]) || 0;
     const activeQty = Math.max(0, totalQty - soldQty);
 
     if (activeQty <= 0) return; // Completely sold out, excluded from active portfolio

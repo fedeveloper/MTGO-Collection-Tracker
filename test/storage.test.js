@@ -76,3 +76,31 @@ test('purchase price drives the P&L on cost', () => {
   assert.equal(summary.totalPurchaseCostTix, 4);
   assert.equal(summary.unrealizedPnlOnCostTix, 2);
 });
+
+test('after a .dek upload only later sales are subtracted from .dek cards', () => {
+  storage.clearHistory();
+  for (const s of storage.getSalesHistory()) storage.undoSale(s.id);
+  storage.recordSale({ catId: 40, quantity: 1, salePriceTix: 2 });
+  storage.recordSale({ catId: 41, quantity: 1, salePriceTix: 2 });
+
+  // The new .dek is imported after those sales: they are already reflected in it
+  const importedAt = new Date(Date.now() + 1000).toISOString();
+  storage.saveSettings({ ...storage.getSettings(), collectionImportedAt: importedAt });
+  const [laterSale] = storage.recordSale({ catId: 40, quantity: 1, salePriceTix: 2 });
+  laterSale.saleDate = new Date(Date.now() + 2000).toISOString();
+  const sales = storage.getSalesHistory().map((s) => (s.id === laterSale.id ? laterSale : s));
+  fs.writeFileSync(path.join(tmpDir, 'data', 'sales_history.json'), JSON.stringify(sales));
+
+  const fromDek = { ...card(40, 2, 3), fromDek: true };
+  const manualOnly = card(41, 2, 3);
+  const { cards, summary } = storage.calculateMovements([fromDek, manualOnly]);
+  const byId = Object.fromEntries(cards.map((c) => [c.catId, c]));
+
+  assert.equal(byId[40].quantity, 2, 'only the sale after the import is subtracted');
+  assert.equal(byId[41].quantity, 2, 'cards not in the .dek keep subtracting every sale');
+  assert.equal(summary.totalSalesCount, 3, 'realized P&L still counts every sale');
+  assert.equal(summary.totalRealizedPnlTix, 6);
+
+  storage.saveSettings({ ...storage.getSettings(), collectionImportedAt: null });
+  for (const s of storage.getSalesHistory()) storage.undoSale(s.id);
+});
