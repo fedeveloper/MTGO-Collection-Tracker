@@ -11,6 +11,9 @@ import { AddCardModal } from './components/AddCardModal';
 import { OnboardingView } from './components/OnboardingView';
 import { translations } from './i18n/translations';
 
+const SYNCING_POLL_MS = 5000;
+const IDLE_POLL_MS = 60000;
+
 export function App() {
   const [cards, setCards] = useState([]);
   const [summary, setSummary] = useState({});
@@ -52,18 +55,45 @@ export function App() {
       setSalesHistory(colRes.data.salesHistory || []);
       setIsSyncing(colRes.data.isSyncing || false);
       setHistory(histRes.data || []);
+      return !!colRes.data.isSyncing;
     } catch (err) {
       console.error('Error fetching collection data:', err);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
+  // Poll quickly only while the server is syncing; otherwise a slow poll picks up scheduled syncs.
+  // Polling pauses while the tab is hidden and refreshes as soon as it becomes visible again.
   useEffect(() => {
-    fetchData();
+    let timer = null;
+    let cancelled = false;
+    let inFlight = false;
 
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
+    const poll = async () => {
+      if (inFlight) return;
+      clearTimeout(timer);
+      if (document.hidden) return;
+      inFlight = true;
+      const serverSyncing = await fetchData();
+      inFlight = false;
+      if (!cancelled) {
+        timer = setTimeout(poll, serverSyncing ? SYNCING_POLL_MS : IDLE_POLL_MS);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (!document.hidden) poll();
+    };
+
+    poll();
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const handleSyncNow = async () => {

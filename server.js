@@ -44,30 +44,59 @@ function getActiveDekPath() {
   return null;
 }
 
+// Merged .dek + manual cards with prices, before sold quantities are applied.
+// Always recalculate from this list: cachedEnrichedCards already has sales subtracted.
+let cachedRawCards = [];
 let cachedEnrichedCards = [];
 let cachedSummary = {};
-let isSyncing = false;
+let syncPromise = null;
 let syncProgress = { current: 0, total: 0, status: 'idle' };
 let syncIntervalTimer = null;
 
-async function performPriceSync() {
+function recalculate(priceSource, timeframe) {
+  const result = calculateMovements(cachedRawCards, priceSource || 'scryfall', timeframe || 'time_zero');
+  cachedEnrichedCards = result.cards;
+  cachedSummary = result.summary;
+  return result;
+}
+
+async function waitForIdleSync() {
+  while (syncPromise) {
+    await syncPromise.catch(() => {});
+  }
+}
+
+/**
+ * Run a price sync. Concurrent callers share the sync already in progress; pass force=true
+ * when the inputs changed (collection, custom links, price source) so a fresh sync runs after it.
+ */
+async function performPriceSync({ force = false } = {}) {
+  while (syncPromise) {
+    if (!force) {
+      console.log('[Sync] Price sync already in progress. Waiting for it...');
+      return syncPromise;
+    }
+    await syncPromise.catch(() => {});
+  }
+  syncPromise = runPriceSync().finally(() => {
+    syncPromise = null;
+  });
+  return syncPromise;
+}
+
+async function runPriceSync() {
   const activeDek = getActiveDekPath();
   const manualCards = getManualCards();
 
   if (!activeDek && manualCards.length === 0) {
     console.log('[Sync] No Collection.dek file or manual cards found. Waiting for upload.');
+    cachedRawCards = [];
     cachedEnrichedCards = [];
     cachedSummary = {};
     return { cards: [], summary: {}, salesHistory: getSalesHistory() };
   }
 
-  if (isSyncing) {
-    console.log('[Sync] Price sync already in progress. Skipping...');
-    return { cards: cachedEnrichedCards, summary: cachedSummary, salesHistory: getSalesHistory() };
-  }
-
   try {
-    isSyncing = true;
     syncProgress = { current: 0, total: 0, status: 'starting' };
     const settings = getSettings();
     const priceSource = settings.priceSource || 'scryfall';
@@ -93,6 +122,7 @@ async function performPriceSync() {
 
     if (parsedCards.length === 0) {
       console.log('[Sync] Collection is empty.');
+      cachedRawCards = [];
       cachedEnrichedCards = [];
       cachedSummary = {};
       return { cards: [], summary: {}, salesHistory: getSalesHistory() };
@@ -117,16 +147,14 @@ async function performPriceSync() {
     });
 
     addSnapshot(merged, priceSource);
-    const result = calculateMovements(merged, priceSource, timeframe);
-    cachedEnrichedCards = result.cards;
-    cachedSummary = result.summary;
+    cachedRawCards = merged;
+    const result = recalculate(priceSource, timeframe);
 
+    // Re-read settings: they may have been changed while prices were being fetched
+    const latestSettings = getSettings();
     const now = new Date();
-    const nextSync = new Date(now.getTime() + (settings.scheduleIntervalMinutes || 60) * 60 * 1000);
-    
-    settings.lastSyncTime = now.toISOString();
-    settings.nextSyncTime = nextSync.toISOString();
-    saveSettings(settings);
+    const nextSync = new Date(now.getTime() + (latestSettings.scheduleIntervalMinutes || 60) * 60 * 1000);
+    saveSettings({ ...latestSettings, lastSyncTime: now.toISOString(), nextSyncTime: nextSync.toISOString() });
 
     syncProgress = { current: parsedCards.length, total: parsedCards.length, status: 'completed' };
     console.log(`[Sync] Price sync finished successfully for ${merged.length} MTGO cards using [${priceSource}].`);
@@ -135,8 +163,6 @@ async function performPriceSync() {
     console.error('[Sync Error]', error);
     syncProgress.status = 'error';
     throw error;
-  } finally {
-    isSyncing = false;
   }
 }
 
@@ -170,14 +196,10 @@ app.get('/api/collection', async (req, res) => {
     const currentSource = settings.priceSource || 'scryfall';
     const reqTimeframe = req.query.timeframe || settings.timeframe || 'time_zero';
 
-    if (hasCollection && cachedEnrichedCards.length === 0 && !isSyncing) {
-      const syncResult = await performPriceSync();
-      cachedEnrichedCards = syncResult.cards;
-      cachedSummary = syncResult.summary;
-    } else if (hasCollection && cachedEnrichedCards.length > 0 && cachedSummary.timeframe !== reqTimeframe) {
-      const result = calculateMovements(cachedEnrichedCards, currentSource, reqTimeframe);
-      cachedEnrichedCards = result.cards;
-      cachedSummary = result.summary;
+    if (hasCollection && cachedRawCards.length === 0 && !syncPromise) {
+      await performPriceSync();
+    } else if (hasCollection && cachedRawCards.length > 0 && cachedSummary.timeframe !== reqTimeframe) {
+      recalculate(currentSource, reqTimeframe);
     }
 
     res.json({
@@ -185,7 +207,7 @@ app.get('/api/collection', async (req, res) => {
       cards: cachedEnrichedCards,
       summary: cachedSummary,
       salesHistory: getSalesHistory(),
-      isSyncing,
+      isSyncing: !!syncPromise,
       syncProgress
     });
   } catch (err) {
@@ -205,13 +227,16 @@ app.post('/api/upload-dek', async (req, res) => {
       return res.status(400).json({ error: 'The uploaded file does not contain MTGO cards in <Cards CatID="..." /> format.' });
     }
 
+    // Let a running sync finish first, otherwise it would add an old-collection snapshot after the reset
+    await waitForIdleSync();
+
     fs.writeFileSync(DATA_DEK, xmlContent, 'utf-8');
     console.log(`[Upload] New MTGO collection file uploaded: ${filename || 'Collection.dek'} (${parsed.length} cards).`);
 
     clearHistory();
-    cachedEnrichedCards = [];
-    
-    const result = await performPriceSync();
+    cachedRawCards = [];
+
+    const result = await performPriceSync({ force: true });
 
     res.json({
       success: true,
@@ -225,6 +250,18 @@ app.post('/api/upload-dek', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * Quote a text value for CSV. Values starting with a formula trigger (= + - @ tab CR) are prefixed
+ * with an apostrophe so spreadsheet apps don't execute them. Only for text: numbers are written raw.
+ */
+function csvText(value) {
+  let str = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
 
 app.get('/api/export/csv', (req, res) => {
   try {
@@ -243,9 +280,9 @@ app.get('/api/export/csv', (req, res) => {
     const headers = csvHeaders[lang] || csvHeaders.en;
     const rows = cachedEnrichedCards.map((c) => [
       c.catId,
-      `"${(c.name || '').replace(/"/g, '""')}"`,
-      `"${c.set || ''}"`,
-      `"${c.rarity || ''}"`,
+      csvText(c.name),
+      csvText(c.set),
+      csvText(c.rarity),
       c.quantity || 1,
       c.purchasePriceTix !== null ? c.purchasePriceTix.toFixed(2) : '-',
       (c.priceTix || 0).toFixed(2),
@@ -254,11 +291,12 @@ app.get('/api/export/csv', (req, res) => {
       ((c.priceTix || 0) * (c.quantity || 1)).toFixed(2),
       c.purchaseDeltaTix !== null ? (c.purchaseDeltaTix * c.quantity).toFixed(2) : '-',
       `${(c.deltaPercent || 0)}%`,
-      `"${c.signal || 'neutral'}"`,
-      c.trend || 'stable'
+      csvText(c.signal || 'neutral'),
+      csvText(c.trend || 'stable')
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    // UTF-8 BOM so Excel detects the encoding (accented headers and card names); CRLF per RFC 4180
+    const csvContent = '\uFEFF' + [headers.map(csvText).join(','), ...rows.map((r) => r.join(','))].join('\r\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="MTGO_Collection_Report.csv"');
@@ -295,10 +333,8 @@ app.delete('/api/history', (req, res) => {
     const timeframe = settings.timeframe || 'time_zero';
     
     let result = { cards: cachedEnrichedCards, summary: cachedSummary, salesHistory: getSalesHistory() };
-    if (cachedEnrichedCards.length > 0) {
-      result = calculateMovements(cachedEnrichedCards, source, timeframe);
-      cachedEnrichedCards = result.cards;
-      cachedSummary = result.summary;
+    if (cachedRawCards.length > 0) {
+      result = recalculate(source, timeframe);
     }
     
     res.json({ success: true, history: getHistory(source), cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
@@ -317,8 +353,7 @@ app.post('/api/card/custom-link', async (req, res) => {
     setCustomLink(catId, scryfallUrl);
     console.log(`[CustomLink] Set custom Scryfall URL for CatID ${catId}: ${scryfallUrl || 'REMOVED'}`);
 
-    cachedEnrichedCards = [];
-    const result = await performPriceSync();
+    const result = await performPriceSync({ force: true });
     res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -336,9 +371,7 @@ app.post('/api/card/purchase', (req, res) => {
 
     savePurchase(catId, purchasePriceTix);
     const settings = getSettings();
-    const result = calculateMovements(cachedEnrichedCards, settings.priceSource, settings.timeframe);
-    cachedEnrichedCards = result.cards;
-    cachedSummary = result.summary;
+    const result = recalculate(settings.priceSource, settings.timeframe);
 
     res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
@@ -355,9 +388,7 @@ app.post('/api/card/sell', (req, res) => {
 
     const salesHistory = recordSale({ catId, name, set, quantity, purchasePriceTix, salePriceTix, imageUri });
     const settings = getSettings();
-    const result = calculateMovements(cachedEnrichedCards, settings.priceSource, settings.timeframe);
-    cachedEnrichedCards = result.cards;
-    cachedSummary = result.summary;
+    const result = recalculate(settings.priceSource, settings.timeframe);
 
     res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory });
   } catch (err) {
@@ -382,9 +413,7 @@ app.delete('/api/sales/:id', (req, res) => {
 
     const salesHistory = undoSale(id);
     const settings = getSettings();
-    const result = calculateMovements(cachedEnrichedCards, settings.priceSource, settings.timeframe);
-    cachedEnrichedCards = result.cards;
-    cachedSummary = result.summary;
+    const result = recalculate(settings.priceSource, settings.timeframe);
 
     res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory });
   } catch (err) {
@@ -400,8 +429,7 @@ app.post('/api/card/manual', async (req, res) => {
     }
 
     addManualCard({ catId, name, quantity, purchasePriceTix });
-    cachedEnrichedCards = [];
-    const result = await performPriceSync();
+    const result = await performPriceSync({ force: true });
 
     res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
@@ -417,8 +445,7 @@ app.delete('/api/card/manual/:catId', async (req, res) => {
     }
 
     deleteManualCard(catId);
-    cachedEnrichedCards = [];
-    const result = await performPriceSync();
+    const result = await performPriceSync({ force: true });
 
     res.json({ success: true, cards: result.cards, summary: result.summary, salesHistory: result.salesHistory });
   } catch (err) {
@@ -433,8 +460,10 @@ app.get('/api/settings', (req, res) => {
 app.post('/api/settings', async (req, res) => {
   try {
     const current = getSettings();
-    const sourceChanged = req.body.priceSource && req.body.priceSource !== current.priceSource;
-    const updated = { ...current, ...req.body };
+    // Sync timestamps are server-owned; the client echoes back its (possibly stale) copy
+    const { lastSyncTime, nextSyncTime, ...changes } = req.body || {};
+    const sourceChanged = changes.priceSource && changes.priceSource !== current.priceSource;
+    const updated = { ...current, ...changes };
     
     saveSettings(updated);
     setupScheduler();
@@ -444,17 +473,15 @@ app.post('/api/settings', async (req, res) => {
     let salesHistory = getSalesHistory();
     if (sourceChanged) {
       console.log(`[Settings] Price source changed to [${updated.priceSource}]. Triggering sync...`);
-      const result = await performPriceSync();
+      const result = await performPriceSync({ force: true });
       cards = result.cards;
       summary = result.summary;
       salesHistory = result.salesHistory;
     } else {
-      const result = calculateMovements(cachedEnrichedCards, updated.priceSource, updated.timeframe);
+      const result = recalculate(updated.priceSource, updated.timeframe);
       cards = result.cards;
       summary = result.summary;
       salesHistory = result.salesHistory;
-      cachedEnrichedCards = cards;
-      cachedSummary = summary;
     }
 
     res.json({ success: true, settings: updated, cards, summary, salesHistory });

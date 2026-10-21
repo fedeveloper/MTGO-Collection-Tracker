@@ -3,7 +3,6 @@ import { X, PlusCircle, Check } from 'lucide-react';
 import { translations } from '../i18n/translations';
 
 export function AddCardModal({ isOpen, onClose, onAddCard, lang = 'en' }) {
-  if (!isOpen) return null;
   const t = translations[lang] || translations.en;
 
   const [catIdInput, setCatIdInput] = useState('');
@@ -11,6 +10,8 @@ export function AddCardModal({ isOpen, onClose, onAddCard, lang = 'en' }) {
   const [qtyInput, setQtyInput] = useState(1);
   const [purchasePriceInput, setPurchasePriceInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();

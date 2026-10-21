@@ -67,7 +67,7 @@ export function DashboardStats({ cards = [], summary = {}, lang = 'en', valueFil
           {totalPurchaseCost > 0 && (
             <div className={`stat-badge ${summary.unrealizedPnlOnCostTix >= 0 ? 'badge-gainer' : 'badge-loser'}`} title="P&L vs Cost Basis">
               <Tag size={12} />
-              <span>Acquisti: {summary.unrealizedPnlOnCostTix >= 0 ? '+' : ''}{summary.unrealizedPnlOnCostTix?.toFixed(2)} TIX ({summary.unrealizedPnlOnCostPercent >= 0 ? '+' : ''}{summary.unrealizedPnlOnCostPercent}%)</span>
+              <span>{t.purchasesPnlLabel}: {summary.unrealizedPnlOnCostTix >= 0 ? '+' : ''}{summary.unrealizedPnlOnCostTix?.toFixed(2)} TIX ({summary.unrealizedPnlOnCostPercent >= 0 ? '+' : ''}{summary.unrealizedPnlOnCostPercent}%)</span>
             </div>
           )}
           {summary.totalSalesCount > 0 && (

@@ -55,6 +55,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const SCRYFALL_HEADERS = {
   'Content-Type': 'application/json',
+  'Accept': 'application/json',
   'User-Agent': 'MTGOCollectionTracker/1.0 (https://github.com/mtgo-tracker)'
 };
 
@@ -166,10 +167,6 @@ function buildCardInfo(scryfallCard, catId, priceSource, goatbotsPricesMap = {})
     } else if (validBaseTix > 0) {
       calculatedPriceTix = validBaseTix;
     }
-  } else if (priceSource === 'cardhoarder') {
-    if (validBaseTix > 0) {
-      calculatedPriceTix = Math.round(validBaseTix * 0.96 * 100) / 100;
-    }
   }
 
   const imageUri = scryfallCard.image_uris?.normal || 
@@ -201,7 +198,7 @@ function buildCardInfo(scryfallCard, catId, priceSource, goatbotsPricesMap = {})
 /**
  * Fetch card prices and metadata with 3-tier resolution engine (Custom URL -> CatID -> Card Name)
  * @param {Array<{catId: number, name: string}>} cards List of cards from .dek
- * @param {string} priceSource - 'scryfall' | 'goatbots' | 'cardhoarder'
+ * @param {string} priceSource - 'scryfall' | 'goatbots'
  * @returns {Promise<Map<number, object>>} Map of catId -> card details + price
  */
 export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
@@ -247,6 +244,7 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
   for (let i = 0; i < remainingCards.length; i += BATCH_SIZE) {
     const batch = remainingCards.slice(i, i + BATCH_SIZE);
     const identifiers = batch.map((c) => ({ mtgo_id: c.catId }));
+    const requestedIds = new Set(batch.map((c) => c.catId));
 
     try {
       const response = await axios.post(
@@ -257,12 +255,14 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
 
       if (response.data && response.data.data) {
         response.data.data.forEach((scryfallCard) => {
-          const mtgoId = scryfallCard.mtgo_id || scryfallCard.mtgo_foil_id;
-          if (!mtgoId) return;
-
-          const cardInfo = buildCardInfo(scryfallCard, mtgoId, priceSource, goatbotsPricesMap);
-          cardMetadataCache.set(mtgoId, cardInfo);
-          resultMap.set(mtgoId, cardInfo);
+          // A foil CatID resolves to the same Scryfall card as its non-foil twin,
+          // so map the result to whichever of the two ids was actually requested
+          [scryfallCard.mtgo_id, scryfallCard.mtgo_foil_id].forEach((mtgoId) => {
+            if (!mtgoId || !requestedIds.has(mtgoId)) return;
+            const cardInfo = buildCardInfo(scryfallCard, mtgoId, priceSource, goatbotsPricesMap);
+            cardMetadataCache.set(mtgoId, cardInfo);
+            resultMap.set(mtgoId, cardInfo);
+          });
         });
       }
     } catch (err) {
@@ -298,17 +298,18 @@ export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {
 
         if (response.data && response.data.data) {
           response.data.data.forEach((scryfallCard) => {
-            const matchingOriginal = nameBatch.find(
+            // Several unmapped CatIDs (e.g. different printings) can share the same name
+            const matchingOriginals = nameBatch.filter(
               (orig) => 
                 orig.name.toLowerCase() === scryfallCard.name.toLowerCase() ||
                 scryfallCard.name.toLowerCase().startsWith(orig.name.toLowerCase() + ' //')
             );
 
-            if (!matchingOriginal) return;
-
-            const cardInfo = buildCardInfo(scryfallCard, matchingOriginal.catId, priceSource, goatbotsPricesMap);
-            cardMetadataCache.set(matchingOriginal.catId, cardInfo);
-            resultMap.set(matchingOriginal.catId, cardInfo);
+            matchingOriginals.forEach((matchingOriginal) => {
+              const cardInfo = buildCardInfo(scryfallCard, matchingOriginal.catId, priceSource, goatbotsPricesMap);
+              cardMetadataCache.set(matchingOriginal.catId, cardInfo);
+              resultMap.set(matchingOriginal.catId, cardInfo);
+            });
           });
         }
       } catch (err) {
