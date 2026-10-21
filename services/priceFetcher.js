@@ -167,10 +167,6 @@ function buildCardInfo(scryfallCard, catId, priceSource, goatbotsPricesMap = {})
     } else if (validBaseTix > 0) {
       calculatedPriceTix = validBaseTix;
     }
-  } else if (priceSource === 'cardhoarder') {
-    if (validBaseTix > 0) {
-      calculatedPriceTix = Math.round(validBaseTix * 0.96 * 100) / 100;
-    }
   }
 
   const imageUri = scryfallCard.image_uris?.normal || 
@@ -202,7 +198,7 @@ function buildCardInfo(scryfallCard, catId, priceSource, goatbotsPricesMap = {})
 /**
  * Fetch card prices and metadata with 3-tier resolution engine (Custom URL -> CatID -> Card Name)
  * @param {Array<{catId: number, name: string}>} cards List of cards from .dek
- * @param {string} priceSource - 'scryfall' | 'goatbots' | 'cardhoarder'
+ * @param {string} priceSource - 'scryfall' | 'goatbots'
  * @returns {Promise<Map<number, object>>} Map of catId -> card details + price
  */
 export async function fetchCollectionPrices(cards, priceSource = 'scryfall') {

@@ -22,7 +22,40 @@ function writeJsonAtomic(filePath, data) {
   const tmpPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
   fs.renameSync(tmpPath, filePath);
+  jsonCache.delete(filePath);
 }
+
+// Parsed JSON files keyed by path, revalidated by mtime/size so manual edits on disk are still picked up.
+// Cached values are shared: callers must copy before mutating and persist via writeJsonAtomic.
+const jsonCache = new Map();
+
+/**
+ * Read and parse a JSON file through the in-memory cache
+ * @param {string} filePath 
+ * @param {*} fallback Returned when the file is missing or invalid
+ */
+function readJsonCached(filePath, fallback) {
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    jsonCache.delete(filePath);
+    return fallback;
+  }
+  const cached = jsonCache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.value;
+  }
+  try {
+    const value = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    jsonCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, value });
+    return value;
+  } catch {
+    return fallback;
+  }
+}
+
+const PRICE_SOURCES = ['scryfall', 'goatbots'];
 
 const DEFAULT_SETTINGS = {
   scheduleIntervalMinutes: 60,
@@ -37,14 +70,14 @@ const DEFAULT_SETTINGS = {
 export function getSettings() {
   if (!fs.existsSync(SETTINGS_FILE)) {
     saveSettings(DEFAULT_SETTINGS);
-    return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS };
   }
-  try {
-    const raw = fs.readFileSync(SETTINGS_FILE, 'utf-8');
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULT_SETTINGS;
+  const settings = { ...DEFAULT_SETTINGS, ...readJsonCached(SETTINGS_FILE, {}) };
+  // Retired sources (e.g. the old 'cardhoarder' estimate) fall back to Scryfall
+  if (!PRICE_SOURCES.includes(settings.priceSource)) {
+    settings.priceSource = DEFAULT_SETTINGS.priceSource;
   }
+  return settings;
 }
 
 export function saveSettings(settings) {
@@ -52,19 +85,11 @@ export function saveSettings(settings) {
 }
 
 export function getCustomLinks() {
-  if (!fs.existsSync(CUSTOM_LINKS_FILE)) {
-    return {};
-  }
-  try {
-    const raw = fs.readFileSync(CUSTOM_LINKS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return {};
-  }
+  return readJsonCached(CUSTOM_LINKS_FILE, {});
 }
 
 export function setCustomLink(catId, scryfallUrl) {
-  const links = getCustomLinks();
+  const links = { ...getCustomLinks() };
   if (scryfallUrl && scryfallUrl.trim().length > 0) {
     links[String(catId)] = scryfallUrl.trim();
   } else {
@@ -76,16 +101,11 @@ export function setCustomLink(catId, scryfallUrl) {
 
 // --- Card Purchase Prices ---
 export function getPurchases() {
-  if (!fs.existsSync(CARD_PURCHASES_FILE)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(CARD_PURCHASES_FILE, 'utf-8'));
-  } catch {
-    return {};
-  }
+  return readJsonCached(CARD_PURCHASES_FILE, {});
 }
 
 export function savePurchase(catId, purchasePriceTix) {
-  const purchases = getPurchases();
+  const purchases = { ...getPurchases() };
   const catKey = String(catId);
   if (purchasePriceTix !== null && purchasePriceTix !== undefined && purchasePriceTix !== '' && !isNaN(parseFloat(purchasePriceTix))) {
     purchases[catKey] = {
@@ -101,12 +121,7 @@ export function savePurchase(catId, purchasePriceTix) {
 
 // --- Sales History ---
 export function getSalesHistory() {
-  if (!fs.existsSync(SALES_HISTORY_FILE)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(SALES_HISTORY_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
+  return readJsonCached(SALES_HISTORY_FILE, []);
 }
 
 export function recordSale({ catId, name, set, quantity, purchasePriceTix = 0, salePriceTix = 0, imageUri = '' }) {
@@ -129,9 +144,9 @@ export function recordSale({ catId, name, set, quantity, purchasePriceTix = 0, s
     saleDate: new Date().toISOString()
   };
 
-  sales.unshift(saleRecord);
-  writeJsonAtomic(SALES_HISTORY_FILE, sales);
-  return sales;
+  const updatedSales = [saleRecord, ...sales];
+  writeJsonAtomic(SALES_HISTORY_FILE, updatedSales);
+  return updatedSales;
 }
 
 export function undoSale(saleId) {
@@ -143,16 +158,11 @@ export function undoSale(saleId) {
 
 // --- Manual Cards ---
 export function getManualCards() {
-  if (!fs.existsSync(MANUAL_CARDS_FILE)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(MANUAL_CARDS_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
+  return readJsonCached(MANUAL_CARDS_FILE, []);
 }
 
 export function addManualCard({ catId, name, quantity = 1, purchasePriceTix = null }) {
-  const manual = getManualCards();
+  const manual = [...getManualCards()];
   const existingIdx = manual.findIndex((c) => String(c.catId) === String(catId));
   const parsedCatId = parseInt(catId);
   const cardObj = {
@@ -186,20 +196,11 @@ export function deleteManualCard(catId) {
 }
 
 export function getHistory(priceSource) {
-  if (!fs.existsSync(HISTORY_FILE)) {
-    return [];
+  const allHistory = readJsonCached(HISTORY_FILE, []);
+  if (priceSource) {
+    return allHistory.filter((s) => s.priceSource === priceSource || (!s.priceSource && priceSource === 'scryfall'));
   }
-  try {
-    const raw = fs.readFileSync(HISTORY_FILE, 'utf-8');
-    const allHistory = JSON.parse(raw);
-    
-    if (priceSource) {
-      return allHistory.filter((s) => s.priceSource === priceSource || (!s.priceSource && priceSource === 'scryfall'));
-    }
-    return allHistory;
-  } catch {
-    return [];
-  }
+  return allHistory;
 }
 
 export function clearHistory() {
@@ -227,10 +228,8 @@ export function addSnapshot(cardsWithPrices, priceSource = 'scryfall') {
     cardPrices
   };
 
-  allHistory.push(newSnapshot);
-
   const maxHistory = 500;
-  const trimmedHistory = allHistory.slice(-maxHistory);
+  const trimmedHistory = [...allHistory, newSnapshot].slice(-maxHistory);
 
   writeJsonAtomic(HISTORY_FILE, trimmedHistory);
   return newSnapshot;

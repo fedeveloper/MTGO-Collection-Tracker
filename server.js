@@ -251,6 +251,18 @@ app.post('/api/upload-dek', async (req, res) => {
   }
 });
 
+/**
+ * Quote a text value for CSV. Values starting with a formula trigger (= + - @ tab CR) are prefixed
+ * with an apostrophe so spreadsheet apps don't execute them. Only for text: numbers are written raw.
+ */
+function csvText(value) {
+  let str = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
 app.get('/api/export/csv', (req, res) => {
   try {
     if (cachedEnrichedCards.length === 0) {
@@ -268,9 +280,9 @@ app.get('/api/export/csv', (req, res) => {
     const headers = csvHeaders[lang] || csvHeaders.en;
     const rows = cachedEnrichedCards.map((c) => [
       c.catId,
-      `"${(c.name || '').replace(/"/g, '""')}"`,
-      `"${c.set || ''}"`,
-      `"${c.rarity || ''}"`,
+      csvText(c.name),
+      csvText(c.set),
+      csvText(c.rarity),
       c.quantity || 1,
       c.purchasePriceTix !== null ? c.purchasePriceTix.toFixed(2) : '-',
       (c.priceTix || 0).toFixed(2),
@@ -279,11 +291,12 @@ app.get('/api/export/csv', (req, res) => {
       ((c.priceTix || 0) * (c.quantity || 1)).toFixed(2),
       c.purchaseDeltaTix !== null ? (c.purchaseDeltaTix * c.quantity).toFixed(2) : '-',
       `${(c.deltaPercent || 0)}%`,
-      `"${c.signal || 'neutral'}"`,
-      c.trend || 'stable'
+      csvText(c.signal || 'neutral'),
+      csvText(c.trend || 'stable')
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    // UTF-8 BOM so Excel detects the encoding (accented headers and card names); CRLF per RFC 4180
+    const csvContent = '\uFEFF' + [headers.map(csvText).join(','), ...rows.map((r) => r.join(','))].join('\r\n');
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="MTGO_Collection_Report.csv"');
