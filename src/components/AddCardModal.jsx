@@ -60,6 +60,9 @@ export function AddCardModal({ isOpen, onClose, onAddCard, lang = 'en' }) {
             <input 
               type="number"
               required
+              min="1"
+              max="999999"
+              step="1"
               className="search-input"
               style={{ padding: '9px 12px', fontSize: '0.9rem' }}
               placeholder="e.g. 123603"

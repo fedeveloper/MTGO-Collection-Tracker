@@ -14,7 +14,7 @@ A modern full-stack web application designed to automatically track the value in
 
 - 📤 **Drag-and-Drop `.dek` Upload**: Upload or update your MTGO collection file directly in the web UI with automatic Time 0 baseline reset.
 - 🏷️ **Custom Purchase Price Basis (Cost Basis)**: Input custom unit buy costs in TIX for any card to track exact **Unrealized P&L (% and TIX)** against your actual investment cost.
-- 💰 **Card Sale Tracking & Realized P&L**: Record card sales with quantity sold and unit sell price. Sold quantities are automatically excluded from your active portfolio, while calculating your **Total Realized Profit (TIX)**.
+- 💰 **Card Sale Tracking & Realized P&L**: Record card sales with quantity sold and unit sell price. Sold quantities are automatically excluded from your active portfolio, while calculating your **Total Realized Profit (TIX)**. A newly uploaded `.dek` is assumed to already reflect earlier sales, so only sales recorded after the upload are subtracted from its cards (manually added cards keep subtracting every sale).
 - 📜 **Dedicated "Sold / Transactions" Ledger Tab**: View all completed card sales with sale dates, unit buy/sell prices, net realized gain/loss, and 1-click **Undo Sale** transaction restore.
 - ➕ **Manual Card Additions**: Add new MTGO cards directly inside the web UI by CatID or Card Name without requiring `.dek` file re-exports.
 - 🏷️ **Purchase Price Benchmark (`🏷️ Prezzo d'Acquisto`)**: Dedicated benchmark filter to analyze gain/loss percentage exclusively for cards with a set purchase price.
