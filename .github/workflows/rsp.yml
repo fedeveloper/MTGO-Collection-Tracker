@@ -1,0 +1,37 @@
+# Runs rsp (https://github.com/fedeveloper/rsp) on every change.
+# Advisory only: it never fails the build.
+name: rsp
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Pull requests: one comment on the PR, kept up to date, plus annotations.
+  pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: fedeveloper/rsp@v0.2.0
+
+  # Direct pushes to main: the same report in the run's summary (Actions tab).
+  push:
+    if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: rsp check
+        run: npx -y github:fedeveloper/rsp#v0.2.0 check --base ${{ github.event.before }} --head ${{ github.sha }} >> "$GITHUB_STEP_SUMMARY"
