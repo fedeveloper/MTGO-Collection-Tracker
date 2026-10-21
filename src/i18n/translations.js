@@ -45,6 +45,8 @@ export const translations = {
     deleteSnapshotTitle: "Delete Snapshot",
     deleteSnapshotConfirm: "Are you sure you want to delete this snapshot?",
     deleteSnapshotButton: "Delete Snapshot",
+    snapshotDateLabel: "Date & Time:",
+    snapshotValueLabel: "Collection Value:",
 
     // Filters & Timeframes
     timeframeLabel: "Benchmark:",
@@ -113,6 +115,10 @@ export const translations = {
     noSoldCards: "No sold cards recorded yet.",
     undoSale: "Undo Sale",
     undoSaleConfirm: "Undo this sale transaction? The card quantity will be restored to your active collection.",
+    totalSalesLabel: "Total sales:",
+    confirmUndo: "Confirm Undo",
+    purchasesPnlLabel: "Purchases",
+    savedConfirm: "Saved!",
 
     // Add Card Modal
     addCardModalTitle: "Add Card to Collection",
@@ -208,6 +214,8 @@ export const translations = {
     deleteSnapshotTitle: "Elimina Snapshot",
     deleteSnapshotConfirm: "Sei sicuro di voler eliminare questo snapshot?",
     deleteSnapshotButton: "Elimina Snapshot",
+    snapshotDateLabel: "Data & Ora:",
+    snapshotValueLabel: "Valore Collezione:",
 
     // Filters & Timeframes
     timeframeLabel: "Benchmark:",
@@ -276,6 +284,10 @@ export const translations = {
     noSoldCards: "Nessuna carta venduta registrata finora.",
     undoSale: "Annulla Vendita",
     undoSaleConfirm: "Sei sicuro di voler annullare questa vendita? La quantità della carta verrà ripristinata nella tua collezione attiva.",
+    totalSalesLabel: "Totale vendite:",
+    confirmUndo: "Conferma Annulla",
+    purchasesPnlLabel: "Acquisti",
+    savedConfirm: "Salvato!",
 
     // Add Card Modal
     addCardModalTitle: "Aggiungi Carta alla Collezione",

@@ -3,11 +3,10 @@ import { X, ExternalLink, TrendingUp, TrendingDown, ShoppingBag, Link as LinkIco
 import { translations } from '../i18n/translations';
 
 export function CardDetailModal({ card, onClose, onSaveCustomLink, onSavePurchase, onRecordSale, lang = 'en' }) {
-  if (!card) return null;
   const t = translations[lang] || translations.en;
 
-  const [customUrlInput, setCustomUrlInput] = useState(card.customUrl || '');
-  const [purchaseInput, setPurchaseInput] = useState(card.purchasePriceTix !== null && card.purchasePriceTix !== undefined ? card.purchasePriceTix : '');
+  const [customUrlInput, setCustomUrlInput] = useState(card?.customUrl || '');
+  const [purchaseInput, setPurchaseInput] = useState(card?.purchasePriceTix ?? '');
   const [isSavingLink, setIsSavingLink] = useState(false);
   const [isSavingPurchase, setIsSavingPurchase] = useState(false);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
@@ -15,8 +14,10 @@ export function CardDetailModal({ card, onClose, onSaveCustomLink, onSavePurchas
   // Sell form state
   const [showSellForm, setShowSellForm] = useState(false);
   const [sellQty, setSellQty] = useState(1);
-  const [sellPriceInput, setSellPriceInput] = useState(card.priceTix || '');
+  const [sellPriceInput, setSellPriceInput] = useState(card?.priceTix || '');
   const [isSubmittingSale, setIsSubmittingSale] = useState(false);
+
+  if (!card) return null;
 
   const isGainer = card.deltaTix > 0;
   const isLoser = card.deltaTix < 0;
@@ -297,7 +298,7 @@ export function CardDetailModal({ card, onClose, onSaveCustomLink, onSavePurchas
             <h4 style={{ fontSize: '0.9rem', fontWeight: '700' }}>{t.purchasePrice}</h4>
             {purchaseSuccess && (
               <span style={{ fontSize: '0.75rem', color: 'var(--gainer-color)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <CheckCircle size={13} /> Saved!
+                <CheckCircle size={13} /> {t.savedConfirm}
               </span>
             )}
           </div>

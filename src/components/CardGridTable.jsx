@@ -254,7 +254,7 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
               {t.salesHistoryTitle}
             </h3>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Totale vendite: <strong>{salesHistory.length}</strong>
+              {t.totalSalesLabel} <strong>{salesHistory.length}</strong>
             </span>
           </div>
 
@@ -314,14 +314,14 @@ export function CardGridTable({ cards = [], salesHistory = [], onSelectCard, onU
                               onClick={() => handleUndo(sale.id)}
                               style={{ padding: '4px 8px', fontSize: '0.75rem', background: 'var(--loser-color)' }}
                             >
-                              Conferma Annulla
+                              {t.confirmUndo}
                             </button>
                             <button 
                               className="btn btn-secondary"
                               onClick={() => setUndoConfirmId(null)}
                               style={{ padding: '4px 8px', fontSize: '0.75rem' }}
                             >
-                              Annulla
+                              {t.cancel}
                             </button>
                           </div>
                         ) : (

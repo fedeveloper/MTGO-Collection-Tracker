@@ -371,6 +371,7 @@ export function calculateMovements(cards, priceSource = 'scryfall', timeframe = 
     activeCards.push({
       ...card,
       quantity: activeQty,
+      totalValue: Math.round(currPrice * activeQty * 100) / 100,
       originalQuantity: totalQty,
       soldQuantity: soldQty,
       purchasePriceTix,

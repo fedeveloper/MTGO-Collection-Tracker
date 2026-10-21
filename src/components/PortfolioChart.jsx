@@ -193,11 +193,11 @@ export function PortfolioChart({ history = [], lang = 'en', priceSource = 'scryf
 
             <div style={{ background: 'rgba(0,0,0,0.25)', padding: '14px', borderRadius: '10px', marginBottom: '20px', border: '1px solid var(--border-color)', textAlign: 'left', fontSize: '0.85rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Data & Ora:</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t.snapshotDateLabel}</span>
                 <span style={{ fontWeight: '700', color: 'white' }}>{formatSnapshotDate(snapshotToDelete.timestamp)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Valore Collezione:</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t.snapshotValueLabel}</span>
                 <span style={{ fontWeight: '800', color: 'var(--accent-cyan)' }}>{snapshotToDelete.totalValueTix.toFixed(2)} TIX</span>
               </div>
             </div>
@@ -213,7 +213,7 @@ export function PortfolioChart({ history = [], lang = 'en', priceSource = 'scryf
                 disabled={isDeleting}
               >
                 <Trash2 size={16} />
-                <span>{isDeleting ? t.updating : 'Elimina Snapshot'}</span>
+                <span>{isDeleting ? t.updating : t.deleteSnapshotButton}</span>
               </button>
             </div>
           </div>
