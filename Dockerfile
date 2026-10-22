@@ -2,8 +2,12 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-# Retries with longer timeouts help on slow or flaky connections (e.g. a Raspberry Pi on Wi-Fi)
-RUN npm ci --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
+# Tuned for slow connections (e.g. a Raspberry Pi on Wi-Fi at ~60 KB/s): fewer parallel downloads so each
+# package gets enough bandwidth, a 20-minute per-request timeout instead of npm's 5 minutes, and a cache
+# mount that keeps already downloaded packages between attempts.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --maxsockets=3 --fetch-timeout=1200000 \
+      --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
