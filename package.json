@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "MTGO Collection Price Tracker & Trend Analyzer",
   "main": "server.js",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
