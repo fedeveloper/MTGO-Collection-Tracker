@@ -1,135 +1,63 @@
 import React, { useState } from 'react';
-import { X, PlusCircle, Check } from 'lucide-react';
-import { translations } from '../i18n/translations';
+import { makeT } from '../i18n/useT';
+import { Dialog } from './Dialog';
 
-export function AddCardModal({ isOpen, onClose, onAddCard, lang = 'en' }) {
-  const t = translations[lang] || translations.en;
-
-  const [catIdInput, setCatIdInput] = useState('');
-  const [nameInput, setNameInput] = useState('');
-  const [qtyInput, setQtyInput] = useState(1);
-  const [purchasePriceInput, setPurchasePriceInput] = useState('');
+export function AddCardModal({ onClose, onAddCard, lang = 'en' }) {
+  const t = makeT(lang);
+  const [catId, setCatId] = useState('');
+  const [name, setName] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [purchasePrice, setPurchasePrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (!isOpen) return null;
+  const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!catIdInput.trim() || !nameInput.trim()) return;
-
     setIsSubmitting(true);
+    setError(null);
     try {
       await onAddCard({
-        catId: parseInt(catIdInput.trim()),
-        name: nameInput.trim(),
-        quantity: Math.max(1, parseInt(qtyInput) || 1),
-        purchasePriceTix: purchasePriceInput.trim() ? parseFloat(purchasePriceInput) : null
+        catId: parseInt(catId, 10),
+        name: name.trim(),
+        quantity: Math.max(1, parseInt(quantity, 10) || 1),
+        purchasePriceTix: purchasePrice.trim() ? parseFloat(purchasePrice) : null
       });
-      setCatIdInput('');
-      setNameInput('');
-      setQtyInput(1);
-      setPurchasePriceInput('');
       onClose();
     } catch (err) {
-      console.error(err);
+      setError(err.response?.data?.error || t('addCardFailed'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content glass-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-        <button className="modal-close" onClick={onClose}>
-          <X size={20} />
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-          <PlusCircle size={22} color="var(--accent-cyan)" />
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '800' }}>{t.addCardModalTitle}</h2>
+    <Dialog title={t('addCardTitle')} onClose={onClose} closeLabel={t('close')}>
+      <p className="dialog-help">{t('addCardHelp')}</p>
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
+        <div className="field-row">
+          <label className="field">
+            <span>{t('catId')}</span>
+            <input className="input" type="number" required min="1" max="999999" step="1" placeholder="123603" value={catId} onChange={(e) => setCatId(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t('quantity')}</span>
+            <input className="input" type="number" required min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+          </label>
         </div>
-        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '18px' }}>
-          {t.addCardModalSubtitle}
-        </p>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-              CatID MTGO *
-            </label>
-            <input 
-              type="number"
-              required
-              min="1"
-              max="999999"
-              step="1"
-              className="search-input"
-              style={{ padding: '9px 12px', fontSize: '0.9rem' }}
-              placeholder="e.g. 123603"
-              value={catIdInput}
-              onChange={(e) => setCatIdInput(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-              {t.cardNameOrCatId} *
-            </label>
-            <input 
-              type="text"
-              required
-              className="search-input"
-              style={{ padding: '9px 12px', fontSize: '0.9rem' }}
-              placeholder="e.g. Thoughtseize"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                {t.quantityLabel} *
-              </label>
-              <input 
-                type="number"
-                min="1"
-                required
-                className="search-input"
-                style={{ padding: '9px 12px', fontSize: '0.9rem' }}
-                value={qtyInput}
-                onChange={(e) => setQtyInput(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
-                {t.purchasePriceLabel}
-              </label>
-              <input 
-                type="number"
-                step="0.01"
-                min="0"
-                className="search-input"
-                style={{ padding: '9px 12px', fontSize: '0.9rem' }}
-                placeholder="e.g. 6.50"
-                value={purchasePriceInput}
-                onChange={(e) => setPurchasePriceInput(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
-              {t.cancel}
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-              <Check size={16} />
-              <span>{t.addCardSubmit}</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <label className="field">
+          <span>{t('cardName')}</span>
+          <input className="input" type="text" required placeholder="Thoughtseize" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>{t('purchasePriceOptional')}</span>
+          <input className="input" type="number" min="0" step="0.01" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} />
+        </label>
+        {error && <p className="error" role="alert">{error}</p>}
+        <div className="dialog-actions">
+          <button type="button" className="btn btn-outline" onClick={onClose}>{t('cancel')}</button>
+          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>{isSubmitting ? t('saving') : t('addCard')}</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
