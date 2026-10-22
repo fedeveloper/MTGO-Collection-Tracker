@@ -138,4 +138,4 @@ Changes go through pull requests. If you work on the repository with an AI assis
 
 ## License
 
-Released under the MIT License.
+Released under the [MIT License](LICENSE).
