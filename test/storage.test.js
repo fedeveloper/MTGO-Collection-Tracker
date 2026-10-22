@@ -104,3 +104,27 @@ test('after a .dek upload only later sales are subtracted from .dek cards', () =
   storage.saveSettings({ ...storage.getSettings(), collectionImportedAt: null });
   for (const s of storage.getSalesHistory()) storage.undoSale(s.id);
 });
+
+test('a snapshot after a sale values only unsold copies, matching the dashboard', () => {
+  storage.clearHistory();
+  for (const s of storage.getSalesHistory()) storage.undoSale(s.id);
+
+  // A .dek card imported before the sale and a manual-only card, as the sync merges them
+  const importedAt = new Date(Date.now() - 1000).toISOString();
+  storage.saveSettings({ ...storage.getSettings(), collectionImportedAt: importedAt });
+  storage.recordSale({ catId: 50, quantity: 1, salePriceTix: 3 });
+  storage.recordSale({ catId: 51, quantity: 2, salePriceTix: 1.5 });
+  storage.recordSale({ catId: 52, quantity: 1, salePriceTix: 0.4 });
+  const merged = [{ ...card(50, 3.07, 3), fromDek: true }, card(51, 1.49, 2), card(52, 0.43, 4)];
+
+  const snapshot = storage.addSnapshot(merged);
+  const { summary } = storage.calculateMovements(merged);
+
+  assert.equal(snapshot.totalValueTix, 7.43, '2 x 3.07 + 0 x 1.49 + 3 x 0.43');
+  assert.equal(snapshot.totalValueTix, summary.currentPortfolioValue);
+  assert.equal(storage.getHistory('scryfall').at(-1).totalValueTix, summary.currentPortfolioValue);
+  assert.deepEqual(snapshot.cardPrices, { 50: 3.07, 51: 1.49, 52: 0.43 }, 'unit prices are kept, sold-out cards included');
+
+  storage.saveSettings({ ...storage.getSettings(), collectionImportedAt: null });
+  for (const s of storage.getSalesHistory()) storage.undoSale(s.id);
+});
