@@ -1,97 +1,92 @@
-import React from 'react';
-import { Layers, RefreshCw, Clock, Settings, TrendingUp, UploadCloud, Download, Globe, PlusCircle } from 'lucide-react';
-import { translations } from '../i18n/translations';
+import React, { useEffect, useRef, useState } from 'react';
+import { RefreshCw, MoreHorizontal } from 'lucide-react';
+import { makeT } from '../i18n/useT';
+import { formatTime } from '../format';
 
-export function Navbar({ lastSyncTime, isSyncing, onSyncNow, onOpenSettings, onOpenUpload, onOpenAddCard, lang = 'en', onToggleLang }) {
-  const t = translations[lang] || translations.en;
+export function Navbar({ lastSyncTime, nextSyncTime, isSyncing, onSyncNow, onOpenSettings, onOpenUpload, onOpenAddCard, lang = 'en', onToggleLang }) {
+  const t = makeT(lang);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const moreRef = useRef(null);
 
-  const formatTime = (isoString) => {
-    if (!isoString) return t.never;
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return t.never;
-    }
-  };
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const close = (e) => {
+      if (e.type === 'keydown' ? e.key === 'Escape' : !moreRef.current?.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [menuOpen]);
 
-  const handleExportCsv = () => {
-    window.open('/api/export/csv', '_blank');
-  };
+  const exportCsv = () => window.open('/api/export/csv', '_blank');
+
+  const actions = [
+    { label: t('addCard'), run: onOpenAddCard },
+    { label: t('uploadDek'), run: onOpenUpload },
+    { label: t('exportCsv'), run: exportCsv },
+    { label: t('settings'), run: onOpenSettings, separated: true },
+    { label: t('otherLanguage'), run: () => onToggleLang(lang === 'en' ? 'it' : 'en'), lang: lang === 'en' ? 'it' : 'en' }
+  ];
+
+  let status = t('notSynced');
+  if (isSyncing) status = t('syncing');
+  else if (lastSyncTime) {
+    status = t('updatedAt', { time: formatTime(lastSyncTime, lang) });
+    if (nextSyncTime) status += `, ${t('nextAt', { time: formatTime(nextSyncTime, lang) })}`;
+  }
 
   return (
-    <header className="navbar glass-panel">
-      <div className="brand">
-        <div className="brand-icon">
-          <TrendingUp size={24} />
-        </div>
-        <div>
-          <h1 className="brand-title">{t.brandTitle}</h1>
-          <p className="brand-subtitle">{t.brandSubtitle}</p>
-        </div>
-      </div>
+    <header className="topbar">
+      <span className="wordmark">{t('appName')}</span>
+      <span className="sync-status" aria-live="polite">{status}</span>
 
-      <div className="nav-actions">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)', background: 'rgba(0,0,0,0.2)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-          <Clock size={14} color="var(--accent-cyan)" />
-          <span>{t.lastSync} <strong style={{ color: 'white' }}>{formatTime(lastSyncTime)}</strong></span>
-        </div>
+      <nav className="topbar-actions" aria-label={t('moreActions')}>
+        {actions.map((a) => (
+          <button key={a.label} type="button" className="btn btn-quiet" onClick={a.run} lang={a.lang}>
+            {a.label}
+          </button>
+        ))}
+      </nav>
 
-        {/* Language Switcher Toggle */}
-        <button 
-          className="btn btn-secondary"
-          onClick={() => onToggleLang(lang === 'en' ? 'it' : 'en')}
-          title="Switch Language / Cambia Lingua"
-          style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontWeight: '700' }}
+      <button type="button" className="btn btn-primary sync-btn" onClick={onSyncNow} disabled={isSyncing} aria-label={t('syncPrices')}>
+        <RefreshCw size={16} strokeWidth={2.2} className={isSyncing ? 'spin' : ''} />
+        <span className="label">{isSyncing ? t('syncing') : t('syncPrices')}</span>
+      </button>
+
+      <div className="more" ref={moreRef}>
+        <button
+          type="button"
+          className="btn btn-outline icon-btn"
+          aria-label={t('moreActions')}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
         >
-          <Globe size={15} color="var(--accent-cyan)" />
-          <span>{lang === 'en' ? 'EN' : 'IT'}</span>
+          <MoreHorizontal size={18} />
         </button>
-
-        <button 
-          className="btn btn-secondary" 
-          onClick={onOpenAddCard}
-          title={t.addCard}
-        >
-          <PlusCircle size={16} color="var(--accent-cyan)" />
-          <span>{t.addCard}</span>
-        </button>
-
-        <button 
-          className="btn btn-secondary" 
-          onClick={onOpenUpload}
-          title={t.uploadDek}
-        >
-          <UploadCloud size={16} />
-          <span>{t.uploadDek}</span>
-        </button>
-
-        <button 
-          className="btn btn-secondary" 
-          onClick={handleExportCsv}
-          title={t.exportCsv}
-        >
-          <Download size={16} />
-          <span>{t.exportCsv}</span>
-        </button>
-
-        <button 
-          className="btn btn-secondary" 
-          onClick={onOpenSettings}
-          title={t.scheduler}
-        >
-          <Settings size={16} />
-          <span>{t.scheduler}</span>
-        </button>
-
-        <button 
-          className="btn btn-primary" 
-          onClick={onSyncNow} 
-          disabled={isSyncing}
-        >
-          <RefreshCw size={16} className={isSyncing ? 'spin' : ''} />
-          <span>{isSyncing ? t.updating : t.syncNow}</span>
-        </button>
+        {menuOpen && (
+          <div className="menu" role="menu">
+            {actions.map((a) => (
+              <React.Fragment key={a.label}>
+                {a.separated && <hr />}
+                <button
+                  type="button"
+                  role="menuitem"
+                  lang={a.lang}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    a.run();
+                  }}
+                >
+                  {a.label}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
       </div>
     </header>
   );

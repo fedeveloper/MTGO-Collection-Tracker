@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Navbar } from './components/Navbar';
-import { DashboardStats } from './components/DashboardStats';
-import { PortfolioChart } from './components/PortfolioChart';
-import { CardGridTable } from './components/CardGridTable';
+import { Overview } from './components/Overview';
+import { SignalsStrip } from './components/SignalsStrip';
+import { Holdings } from './components/Holdings';
 import { CardDetailModal } from './components/CardDetailModal';
 import { SchedulerModal } from './components/SchedulerModal';
 import { UploadModal } from './components/UploadModal';
 import { AddCardModal } from './components/AddCardModal';
 import { OnboardingView } from './components/OnboardingView';
-import { translations } from './i18n/translations';
+import { makeT } from './i18n/useT';
 
 const SYNCING_POLL_MS = 5000;
 const IDLE_POLL_MS = 60000;
@@ -33,7 +33,11 @@ export function App() {
   const currentLang = settings?.language || 'en';
   const currentSource = settings?.priceSource || 'scryfall';
   const currentTimeframe = settings?.timeframe || 'time_zero';
-  const t = translations[currentLang] || translations.en;
+  const t = makeT(currentLang);
+
+  useEffect(() => {
+    document.documentElement.lang = currentLang;
+  }, [currentLang]);
 
   const fetchData = async () => {
     try {
@@ -223,6 +227,7 @@ export function App() {
       }
     } catch (err) {
       console.error('Add manual card failed:', err);
+      throw err;
     } finally {
       setIsSyncing(false);
     }
@@ -253,26 +258,20 @@ export function App() {
   };
 
   if (loading) {
-    return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'white', flexDirection: 'column', gap: '16px' }}>
-        <div className="brand-icon spin" style={{ width: '48px', height: '48px' }}>
-          ✨
-        </div>
-        <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>{t.loadingCollection}</p>
-      </div>
-    );
+    return <p className="loading">{t('loading')}</p>;
   }
 
   if (!hasCollection && cards.length === 0) {
     return <OnboardingView onUploadSuccess={handleUploadSuccess} lang={currentLang} />;
   }
 
+  const valuableCards = valueFilterEnabled ? cards.filter((c) => c.priceTix >= 1) : cards;
+
   return (
-    <div className="app-container">
-      {/* Top Navbar */}
-      <Navbar 
+    <>
+      <Navbar
         lastSyncTime={settings?.lastSyncTime}
-        nextSyncTime={settings?.nextSyncTime}
+        nextSyncTime={settings?.autoSyncEnabled ? settings?.nextSyncTime : null}
         isSyncing={isSyncing}
         onSyncNow={handleSyncNow}
         onOpenSettings={() => setShowSettingsModal(true)}
@@ -282,35 +281,37 @@ export function App() {
         onToggleLang={handleToggleLang}
       />
 
-      {/* Metric Cards & P&L Summary */}
-      <DashboardStats cards={cards} summary={summary} lang={currentLang} valueFilterEnabled={valueFilterEnabled} />
+      <main>
+        <Overview
+          summary={summary}
+          history={history}
+          timeframe={currentTimeframe}
+          onChangeTimeframe={handleChangeTimeframe}
+          onDeleteSnapshot={handleDeleteSnapshot}
+          priceSource={currentSource}
+          lang={currentLang}
+        />
 
-      {/* Portfolio History Line Chart */}
-      <PortfolioChart 
-        history={history} 
-        lang={currentLang} 
-        priceSource={currentSource} 
-        onDeleteSnapshot={handleDeleteSnapshot}
-      />
+        <SignalsStrip cards={valuableCards} onSelectCard={setSelectedCard} lang={currentLang} />
 
-      {/* Cards Table & Grid View with Timeframe selector, Sold tab, & Trading Signals */}
-      <CardGridTable 
-        cards={cards} 
-        salesHistory={salesHistory}
-        onSelectCard={(card) => setSelectedCard(card)}
-        onUndoSale={handleUndoSale}
-        timeframe={currentTimeframe}
-        onChangeTimeframe={handleChangeTimeframe}
-        lang={currentLang}
-        valueFilterEnabled={valueFilterEnabled}
-        onToggleValueFilter={(val) => setValueFilterEnabled(val)}
-      />
+        <Holdings
+          cards={cards}
+          salesHistory={salesHistory}
+          timeframe={currentTimeframe}
+          onSelectCard={setSelectedCard}
+          onUndoSale={handleUndoSale}
+          lang={currentLang}
+          valueFilterEnabled={valueFilterEnabled}
+          onToggleValueFilter={setValueFilterEnabled}
+        />
+      </main>
 
-      {/* Card Detail Modal */}
       {selectedCard && (
-        <CardDetailModal 
-          card={selectedCard} 
-          onClose={() => setSelectedCard(null)} 
+        <CardDetailModal
+          key={selectedCard.catId}
+          card={selectedCard}
+          timeframe={currentTimeframe}
+          onClose={() => setSelectedCard(null)}
           onSaveCustomLink={handleSaveCustomLink}
           onSavePurchase={handleSavePurchase}
           onRecordSale={handleRecordSale}
@@ -318,32 +319,17 @@ export function App() {
         />
       )}
 
-      {/* Add Card Modal */}
-      <AddCardModal 
-        isOpen={showAddCardModal}
-        onClose={() => setShowAddCardModal(false)}
-        onAddCard={handleAddManualCard}
-        lang={currentLang}
-      />
+      {showAddCardModal && (
+        <AddCardModal onClose={() => setShowAddCardModal(false)} onAddCard={handleAddManualCard} lang={currentLang} />
+      )}
 
-      {/* Settings & Scheduler Modal */}
       {showSettingsModal && (
-        <SchedulerModal 
-          settings={settings} 
-          onClose={() => setShowSettingsModal(false)}
-          onSaveSettings={handleSaveSettings}
-          lang={currentLang}
-        />
+        <SchedulerModal settings={settings} onClose={() => setShowSettingsModal(false)} onSaveSettings={handleSaveSettings} lang={currentLang} />
       )}
 
-      {/* Upload .dek Modal */}
       {showUploadModal && (
-        <UploadModal 
-          onClose={() => setShowUploadModal(false)}
-          onUploadSuccess={handleUploadSuccess}
-          lang={currentLang}
-        />
+        <UploadModal onClose={() => setShowUploadModal(false)} onUploadSuccess={handleUploadSuccess} lang={currentLang} />
       )}
-    </div>
+    </>
   );
 }
