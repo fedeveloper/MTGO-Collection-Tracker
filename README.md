@@ -1,108 +1,141 @@
-# MTGO Collection Price Tracker & Trend Analyzer 🃏📈
+# MTGO Collection Tracker
 
-A modern full-stack web application designed to automatically track the value in **Event Tickets (TIX)** of your **Magic The Gathering Online (MTGO)** card collection, monitor price history, calculate Profit & Loss (P&L) against Time 0 baseline, track cost basis & realized sales profits, and highlight real-time **Trading Signals (Buy / Sell / Take Profit)**.
+A self-hosted web app that tracks what your **Magic: The Gathering Online** collection is worth in **Event Tickets (TIX)**: how prices move since you imported it, what you paid, what you sold, and which cards are worth a look right now.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
-![React](https://img.shields.io/badge/react-18-blue.svg)
-![Vite](https://img.shields.io/badge/vite-6-purple.svg)
-![Docker Ready](https://img.shields.io/badge/docker-ready-cyan.svg)
+Upload the `.dek` file exported from MTGO; the server fetches prices on a schedule, keeps a value history and flags cards to sell.
 
----
+![Collection value, value chart and the cards worth a look](docs/screenshots/desktop-overview.png)
 
-## 🌟 Key Features
+## Features
 
-- 📤 **Drag-and-Drop `.dek` Upload**: Upload or update your MTGO collection file directly in the web UI with automatic Time 0 baseline reset.
-- 🏷️ **Custom Purchase Price Basis (Cost Basis)**: Input custom unit buy costs in TIX for any card to track exact **Unrealized P&L (% and TIX)** against your actual investment cost.
-- 💰 **Card Sale Tracking & Realized P&L**: Record card sales with quantity sold and unit sell price. Sold quantities are automatically excluded from your active portfolio, while calculating your **Total Realized Profit (TIX)**. A newly uploaded `.dek` is assumed to already reflect earlier sales, so only sales recorded after the upload are subtracted from its cards (manually added cards keep subtracting every sale).
-- 📜 **Dedicated "Sold / Transactions" Ledger Tab**: View all completed card sales with sale dates, unit buy/sell prices, net realized gain/loss, and 1-click **Undo Sale** transaction restore.
-- ➕ **Manual Card Additions**: Add new MTGO cards directly inside the web UI by CatID or Card Name without requiring `.dek` file re-exports.
-- 🏷️ **Purchase Price Benchmark (`🏷️ Prezzo d'Acquisto`)**: Dedicated benchmark filter to analyze gain/loss percentage exclusively for cards with a set purchase price.
-- ⚡ **Native GoatBots Daily Price Integration**: Direct integration with **GoatBots Market** by fetching and unzipping their official daily price archive (`price-history.zip`) updated every day at 5:30 AM CET, backed by smart HTTP `HEAD` revalidation (`Last-Modified`) to avoid redundant downloads.
-- 📱 **Responsive Mobile & iPad Design**: Optimized UI layout for smartphones (< 640px) and tablets (< 1024px) with compact 2-column card grids and touch-friendly controls.
-- 🎯 **Global `VALUE ≥ 1 TIX` Toggle Filter**: Exclude low-value/penny cards across all views, gainers/losers lists, and KPI summary counters with a single click.
-- ⚡ **Scryfall & Vendor Multi-Source Pricing**: Native support for **Scryfall API** (official MTGO TIX prices and high-res artwork) and **GoatBots Market**.
-- ⏱️ **Automatic Schedulable Price Check**: Background scheduler with customizable intervals (e.g. every 15m, 30m, 1h, 6h, 24h) or manual *"Sync Now"*.
-- 🚀 **Time 0 Baseline & P&L Tracking**: Tracks portfolio growth and individual card performance relative to the **Time 0 initial import**.
-- 💰 **Trading Decision Signals**:
-  - **`💰 SELL (Take Profit)`**: Highlights cards with significant price gains ($\ge +35\%$ or $+0.75\text{ TIX}$) recommending when to sell on bot vendors.
-  - **`⚠️ NEAR ALL-TIME HIGH`**: Highlights cards trading within 5% of their peak recorded price.
-  - **`📉 HIGH LOSS ALERT`**: Warns when a card has dropped significantly from Time 0.
-- 📊 **Interactive Portfolio History Chart**: Monitor total portfolio value over time with **click-to-delete snapshot management** to remove unwanted data points directly from the chart.
-- 🔗 **3-Tier Card Resolution Engine**:
-  - *Tier 0*: Custom Scryfall URL overrides with rate-limiting protection.
-  - *Tier 1*: MTGO Catalog ID (`CatID`) batch lookup.
-  - *Tier 2*: Automatic card name fallback for MTGO digital variants & promos (including Double-Faced Cards / DFC).
-  - *Tier 3*: Default stub for unmapped entries.
-- 🧩 **Resilient `.dek` XML Parser**: Order-independent XML tag attribute parser with XML entity unescaping (`&amp;`, `&lt;`, `&gt;`).
-- 🔒 **Atomic Data Storage**: Safe JSON filesystem persistence (`writeJsonAtomic`) via temporary file swap to prevent data corruption during unexpected shutdowns.
-- 🌐 **Multi-Language Support**: **English (Default)** and **Italian**, toggleable with 1-click in the UI and persisted in settings.
-- 💾 **1-Click CSV Export**: Export your complete valued collection report with language-aware column headers, metadata, P&L, purchase cost, and trading signals.
-- 🐳 **Docker & Docker Compose Ready**: Plug-and-play deployment on any operating system (including Raspberry Pi 64-bit).
-  
-<img width="1902" height="906" alt="image" src="https://github.com/user-attachments/assets/5851f1de-e6ac-4bb1-b751-5b3233c829fd" />
+- **Collection value and P&L**: total value in TIX and its change since the first import, plus the gain on purchase cost and the profit realized from sales.
+- **Compare with**: switch every price change between the first import (Time 0), the last price check and your purchase price.
+- **Value over time**: a snapshot is saved at every price sync (the latest 500 are kept). Select a point on the chart to delete that snapshot.
+- **Worth a look now**: cards with a trading signal, measured against the first import:
+  - **Sell**: up at least 35%, or up at least 0.75 TIX and 20%;
+  - **Near peak**: within 5% of the highest recorded price and more than 10% up;
+  - **Big loss**: down 30% or more.
+- **Collection table or card grid**: tabs for all, rising, falling, signalled and sold cards; search by card or set; a "1 TIX and up" filter; sorting by value, price, change, gain on purchase, quantity or name. The table is the default; the chosen view is remembered per browser.
+- **Card details**: current, reference and highest recorded price, value of your copies, purchase price, sale recording, and links to Scryfall, GoatBots and Cardhoarder.
+- **Purchase prices and sales**: set a purchase price per copy to track the gain on cost. Record sales with quantity and price per copy; sold copies leave the active collection, realized P&L is tracked, and a sale can be undone from the Sold tab.
+- **Manual cards**: add cards that aren't in your `.dek` file by MTGO CatID (1–999999) and name.
+- **Two price sources**: [Scryfall](https://scryfall.com/docs/api) MTGO prices, or the [GoatBots](https://www.goatbots.com/) daily price archive (downloaded only when it changes, then cached).
+- **Card matching**: by a Scryfall printing you link to a card, then by MTGO CatID (foil CatIDs map to their own printing), then by card name, then a placeholder entry.
+- **Scheduled price checks**: automatic sync every 15 minutes to once a day, or on demand with **Sync prices**.
+- **CSV export** of the active collection, with headers in the interface language.
+- **English and Italian** interface; numbers follow the language (e.g. `259,42` in Italian).
+- **Phone, iPad and desktop layouts**: on phones the secondary actions move into a menu, filters and signals scroll sideways, the table becomes a list and dialogs open from the bottom.
 
-<img width="1902" height="908" alt="image" src="https://github.com/user-attachments/assets/18b9da58-edfd-4d81-8db4-a659c57a8b73" />
+| Collection table | Card grid |
+| --- | --- |
+| ![Collection table](docs/screenshots/desktop-collection.png) | ![Card grid](docs/screenshots/desktop-grid.png) |
 
-<img width="1903" height="911" alt="image" src="https://github.com/user-attachments/assets/039f75f2-cdb4-46ff-a267-895faa4a5215" />
+| Card details | Phone | Card details on a phone |
+| --- | --- | --- |
+| ![Card details dialog](docs/screenshots/card-details.png) | ![Phone layout](docs/screenshots/phone.png) | ![Card details on a phone](docs/screenshots/phone-details.png) |
 
----
+The screenshots use a sample collection with real Scryfall prices.
 
-## 💡 How to Export Your Collection from MTGO
+## How quantities, imports and sales fit together
 
-1. Open the official **Magic The Gathering Online (MTGO)** client.
-2. Go to the **Collection** tab.
-3. Right-click inside your cards list on the bottom left and click **Select All**.
-4. Click **Export** on the bottom right and save as **DEK File (.dek)**.
-5. Drag and drop the `.dek` file into MTGO Card Tracker!
+- Uploading a `.dek` file **replaces** the collection and **starts a new price history**: the first snapshot after the upload becomes the new Time 0.
+- A new `.dek` is assumed to already reflect the sales you recorded before uploading it, so only sales recorded **after** the upload are subtracted from its cards. Manually added cards (not in the `.dek`) keep subtracting every sale.
+- Realized P&L and the Sold tab always include every sale. Undoing a sale recorded before the last upload removes it from the ledger but doesn't add the copy back, since the `.dek` already accounted for it.
+- Purchase prices, sales, manual cards and linked Scryfall printings are kept across uploads.
 
----
+## Export your collection from MTGO
 
-## 🚀 Quick Start Guide
+1. Open MTGO and go to the **Collection** tab.
+2. Right-click the card list and choose **Select All**.
+3. Click **Export** and save it as a **DEK file (.dek)**.
+4. Open the app and upload that file.
 
-### Option A: Running with Node.js (Local)
+## Run it
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-username/mtgo-collection-tracker.git
-   cd mtgo-collection-tracker
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Build frontend and start server**:
-   ```bash
-   npm run build
-   npm start
-   ```
-
-4. Open your browser at [http://localhost:3001](http://localhost:3001).
-
----
-
-### Option B: Running with Docker (Recommended)
-
-No local Node.js installation required. Run:
+### With Docker (recommended)
 
 ```bash
+git clone https://github.com/fedeveloper/MTGO-Collection-Tracker.git
+cd MTGO-Collection-Tracker
 docker-compose up -d
 ```
 
-Access the app at [http://localhost:3001](http://localhost:3001).
+Open [http://localhost:3001](http://localhost:3001). Your data is kept in `./data`, mounted into the container. After pulling a new version, rebuild with `docker-compose up -d --build`.
 
----
+### With Node.js
 
-## 🛠️ Built With
+Requires Node.js 20 or later (CI runs on 20 and 24).
 
-- **Backend**: Node.js, Express, Axios.
-- **Frontend**: React 18, Vite 6, Chart.js, Lucide Icons, Vanilla CSS (MTGO Dark & Glassmorphism Design System).
-- **APIs & Data**: Scryfall API (`mtgo_id` collection & named search endpoints), GoatBots Daily Price Archives (`price-history.zip`).
+```bash
+git clone https://github.com/fedeveloper/MTGO-Collection-Tracker.git
+cd MTGO-Collection-Tracker
+npm install
+npm run build
+npm start
+```
 
----
+Open [http://localhost:3001](http://localhost:3001).
 
-## 📄 License
+### Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `3001` | Port of the web server and API |
+| `NODE_ENV` | — | Set to `production` in Docker |
+
+The sync interval, price source and language are set in the app, under **Settings**.
+
+> The app has no login. Run it on your own machine or a trusted network, not on the public internet.
+
+## Data
+
+Everything is stored as JSON in the `data/` folder next to the server (written atomically, so an interrupted write doesn't corrupt a file):
+
+| File | Content |
+| --- | --- |
+| `Collection.dek` | The last uploaded collection |
+| `settings.json` | Sync schedule, price source, language, benchmark, last sync and upload times |
+| `history.json` | Value snapshots with the price of every card |
+| `card_purchases.json` | Purchase prices per CatID |
+| `sales_history.json` | Recorded sales |
+| `manual_cards.json` | Cards added by hand |
+| `custom_links.json` | Scryfall printings linked to CatIDs |
+| `goatbots_prices_cache.json`, `goatbots_meta.json` | GoatBots price cache |
+
+To start over, stop the app and delete the files you want to reset. A `Collection.dek` placed in the project root is used when `data/` has none.
+
+## Development
+
+```bash
+npm install
+npm run server   # API on http://localhost:3001
+npm run dev      # Vite dev server on http://localhost:3000, proxies /api to 3001
+npm test         # Node's built-in test runner, files in test/
+npm run build    # production build in dist/
+```
+
+- **Backend**: Node.js and Express (`server.js`), with the `.dek` parser, price fetching and storage in `services/`.
+- **Frontend**: React 18 and Vite (`src/`), Chart.js for the value chart, Lucide icons. Styles and design tokens live in `src/index.css`; UI strings in `src/i18n/translations.js`.
+- **CI** (`.github/workflows/`): tests and build on Node 20 and 24 for every pull request, plus [rsp](https://github.com/fedeveloper/rsp), which reports risky facts about a diff.
+
+Changes go through pull requests. If you work on the repository with an AI assistant, see [`AGENTS.md`](AGENTS.md).
+
+### API
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `GET` | `/api/collection?timeframe=` | Cards with prices, movements and signals, plus the summary |
+| `POST` | `/api/upload-dek` | Upload a `.dek` (`{ xmlContent, filename }`) and sync |
+| `POST` | `/api/sync` | Sync prices now |
+| `GET` / `DELETE` | `/api/history` | Value snapshots / delete one (`{ timestamp }`) |
+| `POST` | `/api/card/purchase` | Set or clear a purchase price |
+| `POST` | `/api/card/sell` | Record a sale |
+| `GET` / `DELETE` | `/api/sales`, `/api/sales/:id` | List sales / undo one |
+| `POST` / `DELETE` | `/api/card/manual`, `/api/card/manual/:catId` | Add / remove a manual card |
+| `POST` | `/api/card/custom-link` | Link a card to a Scryfall printing |
+| `GET` / `POST` | `/api/settings` | Read / update settings |
+| `GET` | `/api/export/csv` | Download the collection as CSV |
+
+## License
 
 Released under the MIT License.
